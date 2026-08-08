@@ -62,6 +62,13 @@ shape, which also kept one class as the logic/state owner
   stays the one place a future status-transition rule would go. Same
   pattern in [`Invoice`](src/domain/Invoice.ts) (`markPaid()`, `send()`)
   and [`Shipment`](src/domain/Shipment.ts) (`dispatch()`, `deliver()`).
+  Editable fields are gated the same way: `Order`, `Invoice`, `Shipment`
+  and [`ProductionJob`](src/domain/ProductionJob.ts) each expose a
+  `canEdit` getter (true only in that entity's not-yet-actioned status —
+  `"Draft"` for the first three, `"Planned"` for a job, since jobs have no
+  Draft status) and an `update(patch)` method that silently no-ops if
+  `canEdit` is false — so "only drafts can be edited" is enforced in the
+  domain layer, not just by hiding the Edit button in the UI.
 - **Abstraction** — [`Repository<T>`](src/repositories/Repository.ts) is
   an interface; `ERPStore` and every component depend on that interface,
   never on "it's an in-memory array." Swapping storage means writing one
@@ -103,6 +110,12 @@ shape, which also kept one class as the logic/state owner
   bridges it into React, via `useSyncExternalStore`. This is what lets
   `ERPStore` stay framework-agnostic (it would work in a script or a test
   with no React runtime) while components still re-render on change.
+- **Composition over duplication** — [`RecordDialog`](src/components/ui/RecordDialog.tsx)
+  is the one popup shell for viewing/editing a record (see "Record detail
+  popups" below). It owns the view/edit toggle and Save/Cancel/Close
+  chrome; each feature's `*DetailDialog` composes it and supplies only its
+  own fields via a `children(mode)` render prop, instead of four separate
+  popup implementations copying the same modal/edit-toggle boilerplate.
 
 ## The data layer, and swapping in a real database
 
@@ -161,18 +174,53 @@ navigation, and a `selectedInvoiceId` / `settingsTab` state for
 | Original state | Route(s) here |
 |---|---|
 | `screen` | `/dashboard`, `/sales`, `/invoicing`, `/inventory`, `/shipments`, `/production` |
-| `selectedInvoiceId` | `/invoicing/[invoiceId]` (dynamic segment) |
 | `settingsTab` | `/settings/customers`, `/settings/suppliers`, `/settings/products` (nested layout at `src/app/settings/layout.tsx`) |
 
-This means invoice detail and settings tabs are shareable/bookmarkable
-URLs, and `ERPStore` doesn't need to track "current screen" as state at
-all — the URL is the state.
+This means settings tabs are shareable/bookmarkable URLs, and `ERPStore`
+doesn't need to track "current screen" as state at all — the URL is the
+state. Invoice detail *used* to be a route too
+(`/invoicing/[invoiceId]`) but was later replaced by a popup — see
+"Record detail popups" below — for consistency with Sales, Shipments and
+Production, none of which ever had a detail route.
 
 The **sidebar** ([`Sidebar.tsx`](src/components/layout/Sidebar.tsx)) is
 mounted once in the root layout and owns its own collapsed/expanded
 `useState` — that state is UI-only, not domain data, so it doesn't
 belong in `ERPStore`. Because the root layout doesn't remount between
 route changes, it survives navigation anyway.
+
+## Record detail popups (view/edit)
+
+Clicking any Order (board card or table row), Invoice, Shipment, or
+Production job opens a popup — [`RecordDialog`](src/components/ui/RecordDialog.tsx)
+— showing that record's fields, with an **Edit** button that only
+appears when the record is still editable:
+
+| Screen | Detail dialog | Editable when |
+|---|---|---|
+| Sales | [`OrderDetailDialog`](src/components/sales/OrderDetailDialog.tsx) | `order.status === "Draft"` |
+| Invoicing | [`InvoiceDetailDialog`](src/components/invoicing/InvoiceDetailDialog.tsx) | `invoice.status === "Draft"` |
+| Shipments | [`ShipmentDetailDialog`](src/components/shipments/ShipmentDetailDialog.tsx) | `shipment.status === "Draft"` |
+| Production | [`JobDetailDialog`](src/components/production/JobDetailDialog.tsx) | `job.status === "Planned"` |
+
+Each `*DetailDialog` is a thin composition of `RecordDialog`: it holds
+its own `useState` for the staged edit-form values (reset on Cancel,
+committed via the store's `update*` action on Save), and passes a
+`children(mode)` render prop that switches between read-only
+[`RecordRow`](src/components/ui/RecordDialog.tsx)s and `Field`/`Input`
+form controls. `RecordDialog` itself never imports a domain type — it
+only needs `editable: boolean` and a `statusBadge` node — which is what
+makes it reusable across four otherwise-unrelated entities. The
+"editable" boolean is never trusted from the UI alone: each entity's own
+`update()` method re-checks `canEdit` and no-ops if the status has moved
+on (see "Encapsulation" above), so a stale-open dialog can't write past a
+status change that happened elsewhere.
+
+Order editing intentionally covers every mutable field (customer,
+product, qty, price, date) since none of it is downstream-referenced
+until Confirmed. Invoice and Shipment editing is narrower (dates only) —
+their `orderId`/`invoiceId` links are identifiers set by the workflow
+that created them, not free text a user should retype.
 
 ## Deliberate differences from the static mockup
 
@@ -248,11 +296,11 @@ worked examples of the same pattern.
    Kanban using the native HTML5 DnD API, `OrderTable`, `NewOrderDrawer`
    for the incoming-draft review flow, plus a working search filter that
    the original mockup's search box didn't have), Invoicing (list +
-   `/invoicing/[invoiceId]` detail), Inventory (stock table with reorder
-   progress bars), Shipments (table), Production (three-column board with
-   per-job progress on "In Progress" jobs), Settings (nested
-   customers/suppliers/products routes sharing one tab-switcher layout,
-   plus `AddCustomerDialog`).
+   detail, originally a `/invoicing/[invoiceId]` route — see step 12),
+   Inventory (stock table with reorder progress bars), Shipments (table),
+   Production (three-column board with per-job progress on "In Progress"
+   jobs), Settings (nested customers/suppliers/products routes sharing
+   one tab-switcher layout, plus `AddCustomerDialog`).
 10. **Typechecked and built** (`tsc --noEmit`, `next build`) — clean on
     the first full build after fixing the `useSyncExternalStore` snapshot
     bug (`getServerSnapshot` was also missing, which broke static
@@ -264,6 +312,23 @@ worked examples of the same pattern.
     Order drawer, opened an invoice detail page, added a customer and
     confirmed it appeared live in the table, collapsed the sidebar.
     Zero console/page errors across the whole pass.
+12. **Added record detail popups with status-gated editing** (see "Record
+    detail popups" above): built `RecordDialog` + `RecordRow` as the one
+    reusable popup shell, added `canEdit`/`update()` to `Order`,
+    `Invoice`, `Shipment`, `ProductionJob` (converting their editable
+    fields from public `readonly` to private-with-getter, which is
+    transparent to every existing call site since getters read the same
+    way), added matching `update*` actions to `ERPStore`, then wired a
+    `*DetailDialog` into each of Sales (board card + table row),
+    Invoicing, Shipments and Production. Retired the
+    `/invoicing/[invoiceId]` route and its `InvoiceDetail` component in
+    favor of the popup, for consistency with the other three screens
+    (none of which had ever had a detail route). Verified with a
+    CDP-driven headless Chrome session (no Playwright install in this
+    environment): opened a Draft order, edited customer/qty, saved, and
+    confirmed the new values and recalculated amount appeared in both the
+    dialog and the Kanban card behind it; confirmed the Edit button is
+    absent for a Confirmed order, a Sent invoice, and an In Progress job.
 
 ## Running it
 

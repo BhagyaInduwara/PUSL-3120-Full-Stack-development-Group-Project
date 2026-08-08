@@ -12,7 +12,12 @@ const columns: Column<Order>[] = [
   { header: "Status", cell: (o) => <StatusTag entity={o} /> },
 ];
 
+interface OrderTableProps {
+  orders: Order[];
+  onSelect: (order: Order) => void;
+}
+
 /** OrderTable — the Sales screen's flat table view, an alternative to the Kanban board. */
-export function OrderTable({ orders }: { orders: Order[] }) {
-  return <Table columns={columns} rows={orders} rowKey={(o) => o.id} />;
+export function OrderTable({ orders, onSelect }: OrderTableProps) {
+  return <Table columns={columns} rows={orders} rowKey={(o) => o.id} onRowClick={onSelect} />;
 }

@@ -12,10 +12,10 @@ import {
 import { ACTIVITY_FEED_SEED, REVENUE_SERIES_SEED, INCOMING_DRAFT_SEED } from "@/repositories/seed-data";
 import { IncomingOrderDraft, type DraftLineItem } from "@/domain/IncomingOrderDraft";
 import { Money } from "@/domain/Money";
-import type { Order, OrderStatus } from "@/domain/Order";
-import type { Invoice } from "@/domain/Invoice";
-import type { Shipment } from "@/domain/Shipment";
-import type { JobStatus } from "@/domain/ProductionJob";
+import type { Order, OrderStatus, OrderEditableFields } from "@/domain/Order";
+import type { Invoice, InvoiceEditableFields } from "@/domain/Invoice";
+import type { Shipment, ShipmentEditableFields } from "@/domain/Shipment";
+import type { ProductionJob, JobStatus, ProductionJobEditableFields } from "@/domain/ProductionJob";
 import type { Customer, CustomerProps } from "@/domain/Customer";
 
 /**
@@ -59,6 +59,12 @@ export class ERPStore extends Observable {
 
   moveOrderStatus(orderId: string, status: OrderStatus): void {
     this.orderRepo.moveStatus(orderId, status);
+    this.notify();
+  }
+
+  /** No-ops (via Order.canEdit) once the order is past Draft — see Order.update. */
+  updateOrder(orderId: string, patch: Partial<OrderEditableFields>): void {
+    this.orderRepo.findById(orderId)?.update(patch);
     this.notify();
   }
 
@@ -115,6 +121,11 @@ export class ERPStore extends Observable {
     this.notify();
   }
 
+  updateInvoice(id: string, patch: Partial<InvoiceEditableFields>): void {
+    this.invoiceRepo.findById(id)?.update(patch);
+    this.notify();
+  }
+
   // ------------------------------------------------------------- Inventory
   get inventory() {
     return this.inventoryRepo.findAll();
@@ -129,13 +140,31 @@ export class ERPStore extends Observable {
     return this.orderRepo.findById(shipment.orderId)?.customer ?? "—";
   }
 
+  findShipment(id: string): Shipment | undefined {
+    return this.shipmentRepo.findById(id);
+  }
+
+  updateShipment(id: string, patch: Partial<ShipmentEditableFields>): void {
+    this.shipmentRepo.findById(id)?.update(patch);
+    this.notify();
+  }
+
   // ------------------------------------------------------------ Production
-  get jobs() {
+  get jobs(): ProductionJob[] {
     return this.jobRepo.findAll();
   }
 
-  jobsByStatus(status: JobStatus) {
+  findJob(id: string): ProductionJob | undefined {
+    return this.jobRepo.findById(id);
+  }
+
+  jobsByStatus(status: JobStatus): ProductionJob[] {
     return this.jobRepo.findByStatus(status);
+  }
+
+  updateJob(id: string, patch: Partial<ProductionJobEditableFields>): void {
+    this.jobRepo.findById(id)?.update(patch);
+    this.notify();
   }
 
   // ------------------------------------------------------- Settings/master

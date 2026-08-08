@@ -10,25 +10,43 @@ export interface InvoiceProps {
   dueDate: string;
 }
 
+export interface InvoiceEditableFields {
+  issueDate: string;
+  dueDate: string;
+}
+
 /** Invoice only stores the orderId reference — amount/customer are derived
  *  by joining with Order in InvoicingService, so Invoice never goes stale
  *  relative to the order it bills. */
 export class Invoice extends StatusfulEntity {
   readonly orderId: string;
-  readonly issueDate: string;
-  readonly dueDate: string;
+  private _issueDate: string;
+  private _dueDate: string;
   private _status: InvoiceStatus;
 
   constructor(props: InvoiceProps) {
     super(props.id);
     this.orderId = props.orderId;
-    this.issueDate = props.issueDate;
-    this.dueDate = props.dueDate;
+    this._issueDate = props.issueDate;
+    this._dueDate = props.dueDate;
     this._status = props.status;
+  }
+
+  get issueDate(): string {
+    return this._issueDate;
+  }
+
+  get dueDate(): string {
+    return this._dueDate;
   }
 
   get status(): InvoiceStatus {
     return this._status;
+  }
+
+  /** Only a Draft invoice hasn't been sent to the customer yet, so only then can its dates still change. */
+  get canEdit(): boolean {
+    return this._status === "Draft";
   }
 
   markPaid(): void {
@@ -37,5 +55,11 @@ export class Invoice extends StatusfulEntity {
 
   send(): void {
     if (this._status === "Draft") this._status = "Sent";
+  }
+
+  update(patch: Partial<InvoiceEditableFields>): void {
+    if (!this.canEdit) return;
+    if (patch.issueDate !== undefined) this._issueDate = patch.issueDate;
+    if (patch.dueDate !== undefined) this._dueDate = patch.dueDate;
   }
 }

@@ -12,19 +12,49 @@ export interface ProductionJobProps {
   progress?: number;
 }
 
+export interface ProductionJobEditableFields {
+  product: string;
+  qty: number;
+  due: string;
+}
+
 export class ProductionJob extends Entity {
-  readonly product: string;
-  readonly qty: number;
-  readonly due: string;
+  private _product: string;
+  private _qty: number;
+  private _due: string;
   readonly status: JobStatus;
   readonly progress: number;
 
   constructor(props: ProductionJobProps) {
     super(props.id);
-    this.product = props.product;
-    this.qty = props.qty;
-    this.due = props.due;
+    this._product = props.product;
+    this._qty = props.qty;
+    this._due = props.due;
     this.status = props.status;
     this.progress = props.progress ?? 0;
+  }
+
+  get product(): string {
+    return this._product;
+  }
+
+  get qty(): number {
+    return this._qty;
+  }
+
+  get due(): string {
+    return this._due;
+  }
+
+  /** ProductionJob has no "Draft" status; "Planned" is its equivalent not-yet-started state, so that's when its scope can still change. */
+  get canEdit(): boolean {
+    return this.status === "Planned";
+  }
+
+  update(patch: Partial<ProductionJobEditableFields>): void {
+    if (!this.canEdit) return;
+    if (patch.product !== undefined) this._product = patch.product;
+    if (patch.qty !== undefined) this._qty = patch.qty;
+    if (patch.due !== undefined) this._due = patch.due;
   }
 }

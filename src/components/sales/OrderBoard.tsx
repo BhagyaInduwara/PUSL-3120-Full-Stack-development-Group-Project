@@ -21,10 +21,11 @@ const COLUMNS: Column[] = [
 interface OrderBoardProps {
   orders: Order[];
   onMove: (orderId: string, status: OrderStatus) => void;
+  onSelect: (order: Order) => void;
 }
 
 /** OrderBoard — 5-column drag-and-drop Kanban. Each column owns its own onDragOver/onDrop; dragged order id travels via the native DataTransfer API. */
-export function OrderBoard({ orders, onMove }: OrderBoardProps) {
+export function OrderBoard({ orders, onMove, onSelect }: OrderBoardProps) {
   const handleDrop = (status: OrderStatus) => (e: DragEvent) => {
     e.preventDefault();
     const orderId = e.dataTransfer.getData("text/plain");
@@ -52,6 +53,7 @@ export function OrderBoard({ orders, onMove }: OrderBoardProps) {
                   <OrderCard
                     order={order}
                     onDragStart={(e) => e.dataTransfer.setData("text/plain", order.id)}
+                    onClick={() => onSelect(order)}
                   />
                 </div>
               ))}

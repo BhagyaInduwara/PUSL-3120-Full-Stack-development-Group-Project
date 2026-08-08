@@ -7,9 +7,11 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/icons";
+import type { Order } from "@/domain/Order";
 import { OrderBoard } from "@/components/sales/OrderBoard";
 import { OrderTable } from "@/components/sales/OrderTable";
 import { NewOrderDrawer } from "@/components/sales/NewOrderDrawer";
+import { OrderDetailDialog } from "@/components/sales/OrderDetailDialog";
 
 type View = "board" | "table";
 
@@ -18,6 +20,7 @@ export default function SalesPage() {
   const [view, setView] = useState<View>("board");
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const orders = store.orders;
   const filtered = useMemo(() => {
@@ -63,9 +66,13 @@ export default function SalesPage() {
       <div className="relative flex-1 overflow-hidden">
         <div className="h-full overflow-auto px-8 pt-6 pb-10">
           {view === "table" ? (
-            <OrderTable orders={filtered} />
+            <OrderTable orders={filtered} onSelect={setSelectedOrder} />
           ) : (
-            <OrderBoard orders={filtered} onMove={(id, status) => store.moveOrderStatus(id, status)} />
+            <OrderBoard
+              orders={filtered}
+              onMove={(id, status) => store.moveOrderStatus(id, status)}
+              onSelect={setSelectedOrder}
+            />
           )}
         </div>
 
@@ -78,6 +85,14 @@ export default function SalesPage() {
               store.approveIncomingDraft();
               setDrawerOpen(false);
             }}
+          />
+        )}
+
+        {selectedOrder && (
+          <OrderDetailDialog
+            order={selectedOrder}
+            onClose={() => setSelectedOrder(null)}
+            onSave={(patch) => store.updateOrder(selectedOrder.id, patch)}
           />
         )}
       </div>

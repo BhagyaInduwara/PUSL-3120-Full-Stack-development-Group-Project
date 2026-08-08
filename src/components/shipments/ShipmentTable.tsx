@@ -5,8 +5,13 @@ import { useERPStore } from "@/store/useERPStore";
 import { Table, type Column } from "@/components/ui/Table";
 import { StatusTag } from "@/components/ui/Tag";
 
+interface ShipmentTableProps {
+  shipments: Shipment[];
+  onSelect: (shipment: Shipment) => void;
+}
+
 /** ShipmentTable — dispatch/delivery tracking; customer is joined from the linked Order via ERPStore.shipmentCustomer. */
-export function ShipmentTable({ shipments }: { shipments: Shipment[] }) {
+export function ShipmentTable({ shipments, onSelect }: ShipmentTableProps) {
   const store = useERPStore();
 
   const columns: Column<Shipment>[] = [
@@ -18,5 +23,5 @@ export function ShipmentTable({ shipments }: { shipments: Shipment[] }) {
     { header: "Status", cell: (sh) => <StatusTag entity={sh} /> },
   ];
 
-  return <Table columns={columns} rows={shipments} rowKey={(sh) => sh.id} />;
+  return <Table columns={columns} rows={shipments} rowKey={(sh) => sh.id} onRowClick={onSelect} />;
 }
