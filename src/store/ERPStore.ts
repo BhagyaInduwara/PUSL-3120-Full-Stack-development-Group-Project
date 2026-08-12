@@ -213,4 +213,42 @@ export class ERPStore extends Observable {
   get lowStockCount(): number {
     return this.inventory.filter((i) => i.isLow).length;
   }
+
+  /** Aggregate sales volume and percentage share by product category. */
+  get salesByCategory(): { category: string; units: number; percentage: number; color: string }[] {
+    const categoryColors: Record<string, string> = {
+      Seating: "#818cf8", // Soft Indigo / Lavender
+      Storage: "#38bdf8", // Soft Sky Cyan
+      Desks: "#34d399",   // Soft Mint Emerald
+      Tables: "#f472b6",  // Soft Rose Coral
+    };
+
+
+    const categoryUnits: Record<string, number> = {
+      Seating: 0,
+      Storage: 0,
+      Desks: 0,
+      Tables: 0,
+    };
+
+    for (const order of this.orders) {
+      const product = this.products.find((p) => p.name === order.product);
+      const category = product?.category ?? "Storage";
+      categoryUnits[category] = (categoryUnits[category] ?? 0) + order.qty;
+    }
+
+    const total = Object.values(categoryUnits).reduce((sum, u) => sum + u, 0) || 1;
+
+    return Object.entries(categoryUnits).map(([category, units]) => ({
+      category,
+      units,
+      percentage: Number(((units / total) * 100).toFixed(1)),
+      color: categoryColors[category] ?? "#94a3b8",
+    }));
+  }
+
+  get totalSalesUnits(): number {
+    return this.orders.reduce((sum, o) => sum + o.qty, 0);
+  }
 }
+
