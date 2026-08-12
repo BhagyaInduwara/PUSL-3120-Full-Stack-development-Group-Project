@@ -143,6 +143,64 @@ the components that call them (e.g. `onClick={() => store.markInvoicePaid(id)}`
 becomes an awaited call with loading state), but the shape of the
 architecture doesn't change.
 
+## Database (Supabase, V1)
+
+The app itself still runs on the in-memory repositories described above —
+this section covers the Supabase project that's being stood up alongside
+it, ahead of actually wiring a `Sql*Repository` per entity. **Supabase is
+explicitly a stand-in**: the plan is to move to MongoDB later, so nothing
+here should end up baked into `ERPStore` or the domain layer — only into
+new repository implementations, exactly as "Swapping in a real database"
+above describes. That's the whole point of the `Repository<T>` interface:
+the database underneath it can change (in-memory → Supabase/Postgres →
+MongoDB) without the swap ever being visible above the repository layer.
+
+**Files:**
+
+- [`DB_V1.sql`](DB_V1.sql) — table structure. Run once in the Supabase SQL
+  Editor against a fresh project. One table per repository/entity
+  (`customers`, `suppliers`, `products`, `inventory_items`, `orders`,
+  `incoming_order_drafts` + `incoming_order_draft_line_items`, `invoices`,
+  `shipments`, `production_jobs`), plus `activity_feed` and
+  `revenue_series` for the two Dashboard feeds. Every status column is
+  `CHECK`-constrained to the same string union TypeScript already enforces
+  (`OrderStatus`, `InvoiceStatus`, ...), and every table gets a
+  `set_updated_at()` trigger and Row Level Security turned on.
+- [`DB_V1_Insert.sql`](DB_V1_Insert.sql) — master/demo data, ported 1:1
+  from [`seed-data.ts`](src/repositories/seed-data.ts) (same ids, names,
+  quantities, prices). Run after `DB_V1.sql`. Safe to re-run.
+
+**Design choices carried over from the domain layer:**
+
+- Primary keys are `TEXT` (`ORD-1036`, `INV-2039`, ...), not generated
+  UUIDs — matching the ids `Entity` already assigns in `src/domain/`, so
+  there's no id-mapping layer needed between rows and domain objects.
+- `orders.customer` and `orders`/`production_jobs`.`product` stay plain
+  `TEXT` columns rather than foreign keys into `customers`/`products`,
+  because that's what the domain model does today (`Order.customer` is a
+  string, not a `Customer` reference — see [`Order.ts`](src/domain/Order.ts)).
+  A future version could tighten this to a real FK, but that's a domain
+  model change first, a schema change second.
+- **RLS posture for V1**: every table has RLS enabled with one permissive
+  "allow everything to `anon` and `authenticated`" policy, because the app
+  has no login/auth system yet. This is deliberately temporary — the SQL
+  file says so at the point where it's created, so it isn't missed later.
+
+**Environment variables** ([`.env.example`](.env.example) — copy to `.env`,
+which is gitignored):
+
+| Variable | Where to find it in Supabase |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Project Settings → Data API → **Project URL** |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Project Settings → Data API → **anon / public** key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings → Data API → **service_role / secret** key (server-only, bypasses RLS — never expose to the browser) |
+| `DATABASE_URL` | Project Settings → Database → **Connection string** → Connection pooling tab (port 6543 — for serverless/edge) |
+| `DIRECT_DATABASE_URL` | Project Settings → Database → **Connection string** → Direct connection tab (port 5432 — for `psql`/long-lived processes) |
+
+Only the first two are needed for a `supabase-js`-based repository; the
+`DATABASE_URL` pair is there in case a repository (or a migration tool)
+talks to Postgres directly instead.
+
 ## Design tokens (Nocturne → Tailwind)
 
 The Nocturne design system's tokens (`_ds/nocturne-.../styles.css`) were
@@ -329,6 +387,19 @@ worked examples of the same pattern.
     confirmed the new values and recalculated amount appeared in both the
     dialog and the Kanban card behind it; confirmed the Edit button is
     absent for a Confirmed order, a Sent invoice, and an In Progress job.
+13. **Stood up the Supabase database (V1)**, ahead of writing any
+    `Sql*Repository` classes: [`DB_V1.sql`](DB_V1.sql) (table structure —
+    one table per repository, status `CHECK` constraints matching the
+    TypeScript unions, `updated_at` triggers, RLS enabled with a
+    temporary permissive policy) and [`DB_V1_Insert.sql`](DB_V1_Insert.sql)
+    (master/demo data ported 1:1 from `seed-data.ts`). Added
+    [`.env.example`](.env.example) documenting every Supabase credential
+    and where to find it in the dashboard, and a local `.env` (gitignored)
+    for actual values. See "Database (Supabase, V1)" above. The app's
+    repositories are still in-memory — this is prep, not a swap yet — and
+    Supabase itself is a placeholder ahead of an eventual move to MongoDB,
+    which is exactly the swap `Repository<T>` was designed to absorb
+    without touching `ERPStore` or any component.
 
 ## Running it
 
@@ -339,5 +410,7 @@ npm run build   # production build + typecheck
 ```
 
 No environment variables or external services are required yet — every
-repository is in-memory. See "Swapping in a real database" above for
-when the real DB/API is ready to wire in.
+repository is in-memory. A Supabase project's schema/seed data exists
+(`DB_V1.sql`, `DB_V1_Insert.sql`, `.env.example`) ahead of actually wiring
+it up — see "Database (Supabase, V1)" and "Swapping in a real database"
+above for how that connects once a `Sql*Repository` is written.
