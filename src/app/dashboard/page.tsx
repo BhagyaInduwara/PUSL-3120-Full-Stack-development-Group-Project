@@ -7,6 +7,7 @@ import { Tag } from "@/components/ui/Tag";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesByCategoryCard } from "@/components/dashboard/SalesByCategoryCard";
+import { TopProductsCard } from "@/components/dashboard/TopProductsCard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { PendingOrdersIcon, ProductionIcon, ShipmentIcon, LowStockIcon } from "@/components/icons";
 
@@ -51,7 +52,8 @@ export default function DashboardPage() {
           />
         </div>
 
-        <div className="grid grid-cols-[1.6fr_1fr] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6 items-start">
+          {/* Left Column: Revenue Chart + Sales by Category Donut Card */}
           <div className="flex flex-col gap-6">
             <Card elevation="sm" className="gap-3 p-6">
               <div className="flex items-baseline justify-between">
@@ -80,13 +82,19 @@ export default function DashboardPage() {
             />
           </div>
 
-          <Card elevation="sm" className="gap-0.5 p-6">
-            <ActivityFeed items={store.activityFeed} />
-          </Card>
+          {/* Right Column: Top Performing Products Leaderboard + Activity Feed */}
+          <div className="flex flex-col gap-6">
+            <TopProductsCard products={store.topProducts} limit={5} />
+
+            <Card elevation="sm" className="gap-0.5 p-6">
+              <ActivityFeed items={store.activityFeed} />
+            </Card>
+          </div>
         </div>
 
       </div>
     </>
   );
 }
+
 

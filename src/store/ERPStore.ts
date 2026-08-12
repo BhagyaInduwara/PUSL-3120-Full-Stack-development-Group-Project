@@ -250,5 +250,53 @@ export class ERPStore extends Observable {
   get totalSalesUnits(): number {
     return this.orders.reduce((sum, o) => sum + o.qty, 0);
   }
+
+  /** Ranked list of top-selling products with sales volume, revenue, category, and inventory status. */
+  get topProducts(): {
+    rank: number;
+    name: string;
+    category: string;
+    units: number;
+    revenueFormatted: string;
+    isLowStock: boolean;
+    stockQty: number;
+  }[] {
+    const productStats: Record<string, { units: number; revenue: Money }> = {};
+
+    for (const order of this.orders) {
+      if (!productStats[order.product]) {
+        productStats[order.product] = { units: 0, revenue: Money.zero() };
+      }
+      productStats[order.product].units += order.qty;
+      productStats[order.product].revenue = productStats[order.product].revenue.add(order.amount);
+    }
+
+    const sorted = Object.entries(productStats)
+      .map(([name, stats]) => {
+        const product = this.products.find((p) => p.name === name);
+        const inventoryItem = this.inventory.find((i) => i.name === name);
+        const category = product?.category ?? inventoryItem?.category ?? "General";
+        const isLowStock = inventoryItem?.isLow ?? false;
+        const stockQty = inventoryItem?.qty ?? 0;
+
+        return {
+          rank: 0,
+          name,
+          category,
+          units: stats.units,
+          revenueFormatted: stats.revenue.format(),
+          isLowStock,
+          stockQty,
+        };
+      })
+      .sort((a, b) => b.units - a.units);
+
+    return sorted.map((item, idx) => ({
+      ...item,
+      rank: idx + 1,
+    }));
+  }
+
 }
+
 
