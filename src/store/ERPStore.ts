@@ -172,6 +172,14 @@ export class ERPStore extends Observable {
     return this.customerRepo.findAll();
   }
 
+  findCustomer(id: string): Customer | undefined {
+    return this.customerRepo.findById(id);
+  }
+
+  ordersByCustomer(customerName: string): Order[] {
+    return this.orders.filter((o) => o.customer === customerName);
+  }
+
   get suppliers() {
     return this.supplierRepo.findAll();
   }
