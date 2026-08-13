@@ -293,9 +293,11 @@ actually being graded on the backend side ("clear separation of concerns
 server/
   src/
     config/       env.ts (fail-fast env var validation), db.ts (Mongoose connect)
-    models/       User.ts — Mongoose schema/model
-    controllers/  auth.controller.ts, user.controller.ts — request handlers
-    routes/       auth.routes.ts, user.routes.ts — wire URLs to controllers
+    models/       User.ts, Customer.ts, Supplier.ts, Product.ts — Mongoose schemas/models
+    controllers/  auth.controller.ts, user.controller.ts, customer.controller.ts,
+                  supplier.controller.ts, product.controller.ts — request handlers
+    routes/       auth.routes.ts, user.routes.ts, customer.routes.ts,
+                  supplier.routes.ts, product.routes.ts — wire URLs to controllers
     middleware/   auth.ts — requireAuth (verifies JWT cookie), requireAdmin (role check)
     utils/        passwordHasher.ts (bcrypt), jwt.ts (sign/verify), asyncHandler.ts
     scripts/      seedAdmin.ts — creates the admin/admin@123 account (npm run seed)
@@ -330,6 +332,37 @@ does) — the Mongoose-side equivalent of the Next.js `User` class's
 against a real bcrypt hash of an unrelated string when the username
 doesn't exist, so "no such user" and "wrong password" take about the
 same time.
+
+**Master data (Customers/Suppliers/Products):** full CRUD, all behind
+`requireAuth` (no public reads — unlike `/register`, there's no reason an
+anonymous caller should see the customer list). Each entity follows the
+same shape: a Mongoose model using the **default ObjectId `_id`** (not
+the `"cust-bluepeak"`-style string ids the Next.js prototype's in-memory
+repositories use — those exist only because `Entity` needed *some* id
+before a real database was in the picture), a `toPublicX()` mapper that
+stringifies `_id` to `id` (mirroring `toPublicUser`), and five route
+handlers — `GET /`, `GET /:id`, `POST /`, `PUT /:id`, `DELETE /:id` —
+each wrapped in `asyncHandler`:
+
+- `GET /api/customers`, `GET /api/suppliers`, `GET /api/products` — list
+  (sorted oldest-first), any authenticated user.
+- `GET /:id` — 404 if the id doesn't resolve to a document.
+- `POST /` — validates required fields itself (matching the
+  hand-rolled validation style already used in `auth.controller.ts`/
+  `user.controller.ts`, rather than only relying on Mongoose schema
+  errors, so a bad request gets a clear 400 message instead of a raw
+  `ValidationError` dump). `Product` additionally checks for an existing
+  `sku` (case-insensitive — the schema uppercases it) before creating,
+  the same "check first" pattern `auth.controller.ts` uses for duplicate
+  usernames, and returns 409 on conflict.
+- `PUT /:id` — partial update (`$set` of only the fields present in the
+  body), re-validates a changed `sku`/price/name the same way create
+  does, 404 if the id doesn't resolve.
+- `DELETE /:id` — 204 on success, 404 if already gone.
+
+No entity here has anything analogous to a password hash, so — unlike
+`User` — there's no `select: false` field and no risk in returning the
+full document from `toPublicX()`.
 
 **A real Express 4 gotcha, worth remembering:** async route handlers
 that throw/reject are **not** automatically forwarded to the error
@@ -372,9 +405,15 @@ has to be done manually if you hit this.
 **Status:** verified end-to-end against a real MongoDB Atlas cluster —
 `npm run seed` created the admin user, and `POST /api/auth/login`,
 `GET /api/auth/me`, `GET /api/users`, and a wrong-password rejection all
-confirmed working via curl with a real session cookie. Builds and
-typechecks cleanly, and fails fast with a clear error if `MONGODB_URI`
-is missing. Not yet wired to the Next.js frontend, which still talks to
+confirmed working via curl with a real session cookie. The
+Customer/Supplier/Product CRUD routes are verified the same way: full
+create → list → get → update → delete round trips via curl with a real
+session cookie against the same Atlas cluster, plus the validation edge
+cases (missing required field → 400, duplicate `Product.sku` → 409,
+negative price → 400, unauthenticated request → 401, unknown id → 404).
+Builds and typechecks cleanly (`npm run typecheck && npm run build`),
+and fails fast with a clear error if `MONGODB_URI` is missing. Not yet
+wired to the Next.js frontend, which still talks to
 its own in-memory auth (see the "Status" callout above "Backend" for the
 cutover plan) — that's Task 5 in the current round of team work.
 
@@ -697,6 +736,24 @@ worked examples of the same pattern.
     missing. Not yet connected to a real MongoDB (no Atlas cluster
     provisioned yet) or wired to the frontend — that's the next step
     once a `MONGODB_URI` is available.
+16. **Built full CRUD for the master-data entities** (Customer, Supplier,
+    Product — see "Master data" above) once a real `MONGODB_URI` was
+    available, mirroring `auth.controller.ts`/`user.controller.ts`'s
+    hand-rolled-validation style rather than introducing a generic
+    CRUD-factory abstraction, to stay consistent with this backend's
+    deliberately plain Express/MVC conventions. Every route requires
+    `requireAuth`; `Product` additionally enforces a unique `sku` with a
+    "check first" `findOne` (same pattern `auth.controller.ts` uses for
+    duplicate usernames) rather than relying on a caught duplicate-key
+    error. Mounted all three routers in `app.ts` next to `userRouter`.
+    Verified against the real MongoDB Atlas cluster with curl (not just
+    `tsc`/`next build` passing): logged in for a session cookie, then for
+    each entity ran create → list → getById → update → delete, plus the
+    edge cases — missing required field (400), `Product` duplicate `sku`
+    (409), negative price (400), unauthenticated request (401), unknown
+    id (404) — all deleted the test records afterward so nothing test-only
+    was left in the shared Atlas cluster. `npm run typecheck` and
+    `npm run build` both clean.
 
 ## Running it
 
