@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useERPStore } from "@/store/useERPStore";
 import { Table, type Column } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +17,7 @@ const columns: Column<Customer>[] = [
 
 export default function CustomersSettingsPage() {
   const store = useERPStore();
+  const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
@@ -25,7 +27,12 @@ export default function CustomersSettingsPage() {
           Add customer
         </Button>
       </div>
-      <Table columns={columns} rows={store.customers} rowKey={(c) => c.id} />
+      <Table
+        columns={columns}
+        rows={store.customers}
+        rowKey={(c) => c.id}
+        onRowClick={(c) => router.push(`/settings/customers/${c.id}`)}
+      />
 
       {dialogOpen && (
         <AddCustomerDialog
@@ -39,3 +46,4 @@ export default function CustomersSettingsPage() {
     </>
   );
 }
+
