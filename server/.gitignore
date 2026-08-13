@@ -1,0 +1,7 @@
+node_modules
+dist
+*.tsbuildinfo
+
+# env files (opt-in for committing if needed)
+.env*
+!.env.example
