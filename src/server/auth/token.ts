@@ -2,26 +2,15 @@ import "server-only";
 import { SESSION_MAX_AGE_SECONDS } from "./constants";
 
 /**
- * Session tokens — a small hand-rolled signed token (payload + HMAC-SHA256
- * signature, base64url-encoded, dot-separated — the same shape as a JWT,
- * without pulling in a JWT library), built on the Web Crypto API so the
- * exact same code verifies a session in both runtimes the app uses it in:
- * Node.js (API routes, Server Components) and Edge (middleware.ts). No
- * server-side session store is needed — the signature is what makes the
- * token trustworthy, so any process holding AUTH_SECRET can verify one.
- *
- * This intentionally does NOT look up the user in the database on every
- * request (that would require Node-only repository/bcrypt code inside Edge
- * middleware, which can't run there) — it trusts the username/role baked
- * into the token at login time until it expires. Good enough for a single
- * "V1" admin app; a revocable-session table is a natural follow-up once
- * the database is real.
+ * Session tokens — standard 3-part HS256 JWT (header.payload.signature)
+ * built with the Web Crypto API. Compatible with tokens signed by jsonwebtoken
+ * on the Express backend as well as tokens signed here in Next.js.
  */
 export interface SessionPayload {
   sub: string;
   username: string;
   role: "admin" | "staff";
-  iat: number;
+  iat?: number;
   exp: number;
 }
 
@@ -40,9 +29,9 @@ function base64UrlDecode(value: string): Uint8Array {
 }
 
 function getSecret(): string {
-  const secret = process.env.AUTH_SECRET;
+  const secret = process.env.JWT_SECRET || process.env.AUTH_SECRET;
   if (!secret) {
-    throw new Error("AUTH_SECRET is not set. Copy it from .env.example into your .env.");
+    throw new Error("JWT_SECRET is not set. Copy it from .env.example into your .env.local.");
   }
   return secret;
 }
@@ -57,36 +46,63 @@ async function getHmacKey(): Promise<CryptoKey> {
   );
 }
 
+/** Signs a standard 3-part HS256 JWT token */
 export async function signSessionToken(payload: Pick<SessionPayload, "sub" | "username" | "role">): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const full: SessionPayload = { ...payload, iat: now, exp: now + SESSION_MAX_AGE_SECONDS };
+  const headerPart = base64UrlEncode(new TextEncoder().encode(JSON.stringify({ alg: "HS256", typ: "JWT" })));
   const payloadPart = base64UrlEncode(new TextEncoder().encode(JSON.stringify(full)));
+  const dataToSign = `${headerPart}.${payloadPart}`;
+
   const key = await getHmacKey();
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payloadPart));
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(dataToSign));
   const signaturePart = base64UrlEncode(new Uint8Array(signature));
-  return `${payloadPart}.${signaturePart}`;
+  return `${dataToSign}.${signaturePart}`;
 }
 
-/** Verifies the signature (timing-safe, via crypto.subtle.verify) and expiry. Returns null if either check fails. */
+/** Verifies a standard 3-part (or legacy 2-part) JWT signature and expiry. Returns null if invalid. */
 export async function verifySessionToken(token: string | undefined | null): Promise<SessionPayload | null> {
   if (!token) return null;
-  const [payloadPart, signaturePart] = token.split(".");
-  if (!payloadPart || !signaturePart) return null;
+  const parts = token.split(".");
+  if (parts.length !== 3 && parts.length !== 2) return null;
 
   const key = await getHmacKey();
-  const valid = await crypto.subtle.verify(
-    "HMAC",
-    key,
-    base64UrlDecode(signaturePart) as BufferSource,
-    new TextEncoder().encode(payloadPart)
-  );
-  if (!valid) return null;
 
-  try {
-    const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadPart))) as SessionPayload;
-    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-    return payload;
-  } catch {
-    return null;
+  if (parts.length === 3) {
+    const [headerPart, payloadPart, signaturePart] = parts;
+    const dataToVerify = `${headerPart}.${payloadPart}`;
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      base64UrlDecode(signaturePart) as BufferSource,
+      new TextEncoder().encode(dataToVerify)
+    );
+    if (!valid) return null;
+
+    try {
+      const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadPart))) as SessionPayload;
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+      return payload;
+    } catch {
+      return null;
+    }
+  } else {
+    // Legacy 2-part format compatibility
+    const [payloadPart, signaturePart] = parts;
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      key,
+      base64UrlDecode(signaturePart) as BufferSource,
+      new TextEncoder().encode(payloadPart)
+    );
+    if (!valid) return null;
+
+    try {
+      const payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(payloadPart))) as SessionPayload;
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+      return payload;
+    } catch {
+      return null;
+    }
   }
 }
