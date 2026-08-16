@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { BACKEND_URL, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "@/server/auth/constants";
+import type { LoginInput, AuthResponse, ApiErrorResponse } from "@/server/auth/types";
 
 /**
  * POST /api/auth/login
  * Proxies login credentials to the Express backend (localhost:4000/api/auth/login).
  * On success, sets the backend's JWT cookie on the browser and returns the user.
  */
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
+export async function POST(
+  request: NextRequest
+): Promise<NextResponse<AuthResponse | ApiErrorResponse>> {
+  const body = (await request.json().catch(() => null)) as Partial<LoginInput> | null;
   const username = typeof body?.username === "string" ? body.username.trim() : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
