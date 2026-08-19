@@ -5,6 +5,7 @@ import type { Order, OrderEditableFields } from "@/domain/Order";
 import { RecordDialog, RecordRow } from "@/components/ui/RecordDialog";
 import { StatusTag } from "@/components/ui/Tag";
 import { Field, Input } from "@/components/ui/Input";
+import { OrderStageTracker } from "./OrderStageTracker";
 
 interface OrderDetailDialogProps {
   order: Order;
@@ -41,12 +42,15 @@ export function OrderDetailDialog({ order, onClose, onSave }: OrderDetailDialogP
       {(mode) =>
         mode === "view" ? (
           <>
-            <RecordRow label="Customer" value={order.customer} />
-            <RecordRow label="Product" value={order.product} />
-            <RecordRow label="Quantity" value={order.qty} />
-            <RecordRow label="Unit price" value={order.priceFormatted} />
-            <RecordRow label="Amount" value={order.amountFormatted} />
-            <RecordRow label="Date" value={order.date} />
+            <OrderStageTracker status={order.status} variant="detailed" className="mb-1" />
+            <div className="flex flex-col gap-1">
+              <RecordRow label="Customer" value={order.customer} />
+              <RecordRow label="Product" value={order.product} />
+              <RecordRow label="Quantity" value={order.qty} />
+              <RecordRow label="Unit price" value={order.priceFormatted} />
+              <RecordRow label="Amount" value={order.amountFormatted} />
+              <RecordRow label="Date" value={order.date} />
+            </div>
           </>
         ) : (
           <>
@@ -71,3 +75,4 @@ export function OrderDetailDialog({ order, onClose, onSave }: OrderDetailDialogP
     </RecordDialog>
   );
 }
+
