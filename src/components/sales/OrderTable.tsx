@@ -1,6 +1,7 @@
 import type { Order } from "@/domain/Order";
 import { Table, type Column } from "@/components/ui/Table";
 import { StatusTag } from "@/components/ui/Tag";
+import { OrderStageTracker } from "./OrderStageTracker";
 
 const columns: Column<Order>[] = [
   { header: "Order", cell: (o) => <span className="font-semibold">{o.id}</span> },
@@ -10,6 +11,10 @@ const columns: Column<Order>[] = [
   { header: "Price", cell: (o) => o.priceFormatted },
   { header: "Date", cell: (o) => o.date, className: "text-[var(--color-neutral-500)]" },
   { header: "Status", cell: (o) => <StatusTag entity={o} /> },
+  {
+    header: "Pipeline Stage",
+    cell: (o) => <OrderStageTracker status={o.status} variant="compact" className="w-[160px] pb-1" />,
+  },
 ];
 
 interface OrderTableProps {
@@ -21,3 +26,4 @@ interface OrderTableProps {
 export function OrderTable({ orders, onSelect }: OrderTableProps) {
   return <Table columns={columns} rows={orders} rowKey={(o) => o.id} onRowClick={onSelect} />;
 }
+

@@ -2,11 +2,10 @@ import "server-only";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from "./constants";
 import { signSessionToken, verifySessionToken, type SessionPayload } from "./token";
-import { userRepository } from "@/repositories/UserRepository";
-import type { User } from "@/domain/User";
+import { User } from "@/domain/User";
 
-/** Signs a token for `user` and sets it as an httpOnly cookie. Only callable from a Route Handler/Server Action (cookie writes aren't allowed during a Server Component render). */
-export async function createSession(user: User): Promise<void> {
+/** Signs a token for `user` and sets it as an httpOnly cookie. Used for session creation in Next.js. */
+export async function createSession(user: Pick<User, "id" | "username" | "role">): Promise<void> {
   const token = await signSessionToken({ sub: user.id, username: user.username, role: user.role });
   const store = await cookies();
   store.set(SESSION_COOKIE_NAME, token, {
@@ -23,16 +22,20 @@ export async function destroySession(): Promise<void> {
   store.delete(SESSION_COOKIE_NAME);
 }
 
-/** Verifies the cookie's signature/expiry AND that the user it names still exists. Safe to call from a Server Component (read-only). */
+/** Verifies the cookie's signature/expiry and returns the authenticated User instance based on JWT claims. */
 export async function getSessionUser(): Promise<User | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE_NAME)?.value;
   const payload = await verifySessionToken(token);
   if (!payload) return null;
 
-  const user = userRepository.findById(payload.sub);
-  if (!user || user.username !== payload.username) return null;
-  return user;
+  return new User({
+    id: payload.sub,
+    username: payload.username,
+    role: payload.role,
+    passwordHash: "",
+    createdAt: new Date((payload.iat ?? Date.now() / 1000) * 1000).toISOString(),
+  });
 }
 
 export async function getSessionPayload(): Promise<SessionPayload | null> {
