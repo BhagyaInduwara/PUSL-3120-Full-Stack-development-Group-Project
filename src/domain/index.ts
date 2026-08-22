@@ -10,4 +10,3 @@ export * from "./Shipment";
 export * from "./ProductionJob";
 export * from "./InventoryItem";
 export * from "./IncomingOrderDraft";
-export * from "./User";
