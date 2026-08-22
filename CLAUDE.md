@@ -293,11 +293,14 @@ actually being graded on the backend side ("clear separation of concerns
 server/
   src/
     config/       env.ts (fail-fast env var validation), db.ts (Mongoose connect)
-    models/       User.ts, Customer.ts, Supplier.ts, Product.ts — Mongoose schemas/models
+    models/       User.ts, Customer.ts, Supplier.ts, Product.ts, Order.ts (placeholder —
+                  see "Invoices & Shipments" below), Invoice.ts, Shipment.ts
     controllers/  auth.controller.ts, user.controller.ts, customer.controller.ts,
-                  supplier.controller.ts, product.controller.ts — request handlers
+                  supplier.controller.ts, product.controller.ts, invoice.controller.ts,
+                  shipment.controller.ts — request handlers
     routes/       auth.routes.ts, user.routes.ts, customer.routes.ts,
-                  supplier.routes.ts, product.routes.ts — wire URLs to controllers
+                  supplier.routes.ts, product.routes.ts, invoice.routes.ts,
+                  shipment.routes.ts — wire URLs to controllers
     middleware/   auth.ts — requireAuth (verifies JWT cookie), requireAdmin (role check)
     utils/        passwordHasher.ts (bcrypt), jwt.ts (sign/verify), asyncHandler.ts
     scripts/      seedAdmin.ts — creates the admin/admin@123 account (npm run seed)
@@ -364,7 +367,45 @@ No entity here has anything analogous to a password hash, so — unlike
 `User` — there's no `select: false` field and no risk in returning the
 full document from `toPublicX()`.
 
-**A real Express 4 gotcha, worth remembering:** async route handlers
+**Invoices & Shipments:** `Invoice` (`orderId`, `status` — Draft/Sent/
+Paid/Overdue, `issueDate`, `dueDate`) and `Shipment` (`orderId`,
+`invoiceId` nullable, `status` — Draft/Packed/Dispatched/Delivered,
+`date`), both `ref`-ing `Order` by ObjectId. Unlike the master-data
+entities, these two don't get a `DELETE` route — an invoice or shipment
+moves through its status lifecycle instead of being removed, matching
+how `Order`/`Invoice`/`Shipment` work in the Next.js domain layer (see
+"Encapsulation" above: status changes go through a dedicated method, not
+a generic mutation). Instead of a generic status-setter route, each gets
+its own intention-revealing endpoint:
+
+- `GET /api/invoices` / `GET /api/shipments` — list, **populates
+  `orderId`** so the response embeds the full order under an `order` key
+  (`toPublicInvoice`/`toPublicShipment` check `document.populated("orderId")`
+  and only include `order` when it's actually been populated — the same
+  functions handle both the populated list response and the unpopulated
+  get/create/update response without a separate mapper).
+- `GET /:id`, `POST /`, `PUT /:id` — same shape as the master-data
+  entities: hand-rolled validation (a valid ObjectId string for
+  `orderId`/`invoiceId`, status must be one of the enum's values),
+  `$set` partial updates on `PUT`.
+- `PATCH /api/invoices/:id/mark-paid` — sets `status: "Paid"`, no body.
+- `PATCH /api/shipments/:id/dispatch` / `.../deliver` — set
+  `status: "Dispatched"` / `"Delivered"`, no body. Mirrors
+  `Shipment.dispatch()`/`.deliver()` on the Next.js side.
+
+**`Order.ts` is a placeholder, not Task 2's real Order CRUD** — worth
+flagging loudly since it's easy to miss. No Order model existed anywhere
+in the repo (checked every branch) when Invoices/Shipments were built,
+but `ref: "Order"` + `.populate("orderId")` need *some* registered
+Mongoose model to resolve against, or `.populate()` throws
+`MissingSchemaError` at request time. [`Order.ts`](server/src/models/Order.ts)
+is deliberately minimal (`customer`, `product`, `qty`, `price`, `status`,
+`date` — mirrors the Next.js domain class's fields) and says so in its
+own file comment. It uses the collection name (`"orders"`) a real Order
+model would use, so whoever builds the real one can replace this file
+outright without losing any data created against it in the meantime —
+just double check field names line up, or migrate existing documents if
+they don't. No `/api/orders` routes exist yet; that's still open. async route handlers
 that throw/reject are **not** automatically forwarded to the error
 middleware in Express 4 (that only became automatic in Express 5) — an
 uncaught rejection would just hang the request forever instead of
@@ -411,8 +452,13 @@ create → list → get → update → delete round trips via curl with a real
 session cookie against the same Atlas cluster, plus the validation edge
 cases (missing required field → 400, duplicate `Product.sku` → 409,
 negative price → 400, unauthenticated request → 401, unknown id → 404).
-Builds and typechecks cleanly (`npm run typecheck && npm run build`),
-and fails fast with a clear error if `MONGODB_URI` is missing. Not yet
+The Invoice/Shipment routes are verified the same way, including the
+`populate("orderId")` list responses and the `mark-paid`/`dispatch`/
+`deliver` actions, against a throwaway `Order` document created directly
+through the placeholder model (no `/api/orders` route exists to create
+one through yet) and deleted again afterward. Builds and typechecks
+cleanly (`npm run typecheck && npm run build`), and fails fast with a
+clear error if `MONGODB_URI` is missing. Not yet
 wired to the Next.js frontend, which still talks to
 its own in-memory auth (see the "Status" callout above "Backend" for the
 cutover plan) — that's Task 5 in the current round of team work.
@@ -754,6 +800,28 @@ worked examples of the same pattern.
     id (404) — all deleted the test records afterward so nothing test-only
     was left in the shared Atlas cluster. `npm run typecheck` and
     `npm run build` both clean.
+17. **Built Invoice and Shipment CRUD** (see "Invoices & Shipments"
+    above), the same day as step 16 and in the same style. Discovered
+    partway through that no `Order` model existed anywhere in the repo
+    yet (checked every branch — Task 2 hadn't landed), which meant
+    `ref: "Order"` + `.populate("orderId")` had nothing to resolve
+    against. Added a deliberately minimal, clearly-commented placeholder
+    [`Order.ts`](server/src/models/Order.ts) rather than either leaving
+    `.populate()` broken or skipping verification — same collection name
+    a real Order model would use, so it's a drop-in replacement later.
+    Gave Invoice/Shipment intention-revealing status actions
+    (`mark-paid`, `dispatch`, `deliver`) instead of a generic PATCH
+    status route, and deliberately left out `DELETE` for both (not in
+    the spec — invoices/shipments move through their lifecycle instead
+    of being removed, same as the Next.js domain layer). Verified against
+    the real Atlas cluster: created a throwaway `Order` via a one-off
+    `tsx` script (no `/api/orders` route exists to create one through),
+    then ran full create/list/get/update/mark-paid for Invoice and
+    create/list/get/update/dispatch/deliver for Shipment via curl with a
+    real session cookie, confirmed `populate("orderId")` actually embeds
+    the order on the list routes and only the list routes, and deleted
+    all test documents (including the throwaway order) afterward. `npm
+    run typecheck` and `npm run build` both clean.
 
 ## Running it
 
