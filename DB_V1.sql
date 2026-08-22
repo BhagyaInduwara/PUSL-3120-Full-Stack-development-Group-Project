@@ -19,11 +19,22 @@
 --   * Every status column is CHECK-constrained to the same union type
 --     TypeScript already enforces (OrderStatus, InvoiceStatus, ...), so an
 --     invalid status can't enter the database even from outside the app.
---   * RLS is enabled on every table. The app has no auth/user system yet,
---     so V1 ships one permissive "allow everything" policy per table — see
---     the RLS section at the bottom. Replace those before any real user
---     data goes in.
+--   * RLS is enabled on every table. Every table except `users` gets one
+--     permissive "allow everything" policy (the app has no fine-grained
+--     authorization yet) — see the RLS section at the bottom. `users` gets
+--     RLS enabled with NO policy at all (default-deny), because it holds
+--     password hashes and must never be readable through the anon/public
+--     key; only server-side code using the service_role key (which bypasses
+--     RLS entirely) is meant to touch it. Replace the permissive policies
+--     on the other tables before any real customer data goes in.
 -- =============================================================================
+
+-- pgcrypto gives us crypt()/gen_salt('bf') below, for seeding a bcrypt
+-- password hash without a separate script (see DB_V1_Insert.sql). The
+-- app's own login flow (src/server/auth/) never calls this directly — it
+-- hashes with bcryptjs in Node — but the two produce wire-compatible
+-- bcrypt hashes, so either side can verify a hash the other one created.
+create extension if not exists pgcrypto;
 
 -- -----------------------------------------------------------------------------
 -- Shared trigger: keep `updated_at` current on every UPDATE.
@@ -37,6 +48,32 @@ begin
   return new;
 end;
 $$;
+
+-- -----------------------------------------------------------------------------
+-- Authentication
+--
+-- Custom auth, not Supabase Auth: the app is planning to migrate off
+-- Supabase to MongoDB later, and Supabase Auth's user store doesn't travel
+-- with that move, so login/session logic is hand-rolled in
+-- src/server/auth/ against this plain table instead (see CLAUDE.md
+-- "Authentication & Users"). `id` follows the same human-readable-text
+-- convention as every other table (user-admin, ...).
+-- -----------------------------------------------------------------------------
+
+create table if not exists users (
+  id            text primary key,
+  username      text not null,
+  password_hash text not null,
+  role          text not null check (role in ('admin', 'staff')),
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create unique index if not exists idx_users_username on users (lower(username));
+
+drop trigger if exists trg_users_updated_at on users;
+create trigger trg_users_updated_at before update on users
+  for each row execute function set_updated_at();
 
 -- -----------------------------------------------------------------------------
 -- Master data
@@ -224,15 +261,16 @@ create trigger trg_production_jobs_updated_at before update on production_jobs
 -- -----------------------------------------------------------------------------
 -- Row Level Security
 --
--- Every table gets RLS turned on (Supabase best practice: the anon/public
--- key is exposed to the browser, so a table with RLS enabled and no policy
--- blocks all access by default — safer than forgetting to enable it later).
+-- Every data table below gets RLS turned on (Supabase best practice: the
+-- anon/public key is exposed to the browser, so a table with RLS enabled
+-- and no policy blocks all access by default — safer than forgetting to
+-- enable it later) plus one permissive policy allowing full access to both
+-- the `anon` and `authenticated` roles, since the app has no fine-grained
+-- authorization yet. TIGHTEN OR REMOVE THESE before real customer data or
+-- multiple users are involved — e.g. scope writes to `authenticated` only,
+-- or add per-row ownership checks once accounts exist.
 --
--- V1 has no auth/user system in the app yet, so each table gets one
--- permissive policy allowing full access to both the `anon` and
--- `authenticated` roles. TIGHTEN OR REMOVE THESE before real customer data
--- or multiple users are involved — e.g. scope writes to `authenticated`
--- only, or add per-row ownership checks once accounts exist.
+-- `users` is NOT in this list — see the next block.
 -- -----------------------------------------------------------------------------
 
 do $$
@@ -255,3 +293,13 @@ begin
     );
   end loop;
 end $$;
+
+-- -----------------------------------------------------------------------------
+-- `users`: RLS enabled, deliberately with NO policy — default-deny for both
+-- `anon` and `authenticated`. This table holds password_hash; it must only
+-- ever be reachable with the service_role key (Route Handlers running in
+-- src/server/auth/, never client code), which bypasses RLS entirely and so
+-- doesn't need a policy here at all.
+-- -----------------------------------------------------------------------------
+
+alter table users enable row level security;

@@ -20,6 +20,21 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
+-- Authentication: the one built-in admin account.
+--
+-- Password hash generated with pgcrypto's crypt()/gen_salt('bf') rather
+-- than hardcoded, so the SQL is self-contained — no separate script needed
+-- to produce the hash. This is the same account src/repositories/user-seed-data.ts
+-- seeds into the in-memory UserRepository the app runs on today: username
+-- "admin", password "admin@123". Change this password after your first
+-- login against a real SqlUserRepository.
+-- -----------------------------------------------------------------------------
+
+insert into users (id, username, password_hash, role) values
+  ('user-admin', 'admin', crypt('admin@123', gen_salt('bf')), 'admin')
+on conflict (id) do nothing;
+
+-- -----------------------------------------------------------------------------
 -- Master data: customers, suppliers, products, inventory
 -- -----------------------------------------------------------------------------
 

@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // server/ is a separate Express + Mongoose project (its own
+    // package.json/tsconfig, not part of this Next.js app) — Next's
+    // frontend-oriented rules (core-web-vitals, etc.) don't apply to it.
+    "server/**",
   ]),
 ]);
 
