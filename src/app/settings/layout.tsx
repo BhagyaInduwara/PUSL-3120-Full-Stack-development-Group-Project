@@ -4,9 +4,9 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 
-type Tab = "customers" | "suppliers" | "products" | "users";
+type Tab = "customers" | "suppliers" | "products";
 
-/** Settings layout — hosts the shared header + tab switcher for the nested routes (/settings/customers|suppliers|products|users), mirroring the original design's single Settings screen with an internal tab state. */
+/** Settings layout — hosts the shared header + tab switcher for the three nested routes (/settings/customers|suppliers|products), mirroring the original design's single Settings screen with an internal tab state. */
 export default function SettingsLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -28,7 +28,6 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
               { value: "customers", label: "Customers" },
               { value: "suppliers", label: "Suppliers" },
               { value: "products", label: "Products" },
-              { value: "users", label: "Users" },
             ]}
           />
         </div>

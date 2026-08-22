@@ -17,16 +17,12 @@ export function SalesByCategoryCard({ categories, totalUnits }: SalesByCategoryC
   const strokeWidth = 14;
   const circumference = 2 * Math.PI * radius;
 
-  // Calculate cumulative offsets for SVG stroke-dashoffset with subtle gap.
-  // Each item's prior-cumulative is derived from `categories` + its index
-  // rather than an outer `let` mutated inside the callback — React 19's
-  // purity rules flag that pattern even though it's synchronous, since a
-  // callback with side effects on an outer variable can't be safely
-  // memoized/reordered by the compiler.
-  const segments = categories.map((item, i) => {
-    const priorCumulative = categories.slice(0, i).reduce((sum, c) => sum + c.percentage, 0);
+  // Calculate cumulative offsets for SVG stroke-dashoffset with subtle gap
+  let cumulativePercentage = 0;
+  const segments = categories.map((item) => {
     const strokeDasharray = `${(item.percentage / 100) * circumference} ${circumference}`;
-    const strokeDashoffset = -((priorCumulative / 100) * circumference);
+    const strokeDashoffset = -((cumulativePercentage / 100) * circumference);
+    cumulativePercentage += item.percentage;
     return {
       ...item,
       strokeDasharray,
