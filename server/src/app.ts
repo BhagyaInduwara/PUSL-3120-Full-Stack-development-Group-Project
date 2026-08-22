@@ -10,6 +10,10 @@ import { productRouter } from "./routes/product.routes.js";
 import inventoryRouter from "./routes/inventory.routes.js";
 import productionJobRouter from "./routes/productionJob.routes.js";
 import { activityRouter, revenueSeriesRouter } from "./routes/dashboard.routes.js";
+import { invoiceRouter } from "./routes/invoice.routes.js";
+import { shipmentRouter } from "./routes/shipment.routes.js";
+import { orderRouter } from "./routes/order.routes.js";
+import { orderDraftRouter } from "./routes/orderDraft.routes.js";
 
 export const app = express();
 
@@ -28,6 +32,10 @@ app.use("/api/inventory", inventoryRouter);
 app.use("/api/production-jobs", productionJobRouter);
 app.use("/api/activity", activityRouter);
 app.use("/api/revenue-series", revenueSeriesRouter);
+app.use("/api/invoices", invoiceRouter);
+app.use("/api/shipments", shipmentRouter);
+app.use("/api/orders", orderRouter);
+app.use("/api/order-drafts", orderDraftRouter);
 
 // Centralized error handler — anything a controller throws (including a
 // rejected Mongoose promise not caught locally) lands here instead of
