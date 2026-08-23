@@ -1,16 +1,22 @@
 import type { Order } from "@/domain/Order";
 import { Card } from "@/components/ui/Card";
 import { StatusTag } from "@/components/ui/Tag";
-import { OrderStageTracker } from "./OrderStageTracker";
 
 interface OrderCardProps {
   order: Order;
+  /** Precomputed by the page (joins the order's line items against Production Jobs) — see OrderBoard.productionStatusFor. */
+  productionStatusWord: string;
   onDragStart: (e: React.DragEvent) => void;
   onClick?: () => void;
 }
 
-/** OrderCard — one draggable Kanban card. Drag state (dataTransfer) is wired by the parent OrderColumn; onClick opens the OrderDetailDialog. */
-export function OrderCard({ order, onDragStart, onClick }: OrderCardProps) {
+const VISIBLE_ITEMS = 2;
+
+/** OrderCard — one draggable Kanban card. Shows up to two line items, then "+N more item(s)", then a date/production-status/amount footer. */
+export function OrderCard({ order, productionStatusWord, onDragStart, onClick }: OrderCardProps) {
+  const visible = order.lineItems.slice(0, VISIBLE_ITEMS);
+  const extra = order.lineItems.length - visible.length;
+
   return (
     <Card draggable onDragStart={onDragStart} onClick={onClick} elevation="sm" className="cursor-grab gap-2">
       <div className="flex justify-between items-center">
@@ -18,18 +24,27 @@ export function OrderCard({ order, onDragStart, onClick }: OrderCardProps) {
         <StatusTag entity={order} />
       </div>
       <div className="text-[13px] font-medium">{order.customer}</div>
-      <div className="text-xs text-[var(--color-neutral-500)] flex justify-between items-center">
-        <span>{order.product}</span>
-        <span>Qty {order.qty}</span>
+
+      <div className="flex flex-col gap-0.5">
+        {visible.map((li, i) => (
+          <div key={i} className="text-xs text-[var(--color-neutral-500)] flex justify-between items-center gap-2">
+            <span className="truncate">{li.product}</span>
+            <span className="flex-none">×{li.qty}</span>
+          </div>
+        ))}
+        {extra > 0 && (
+          <div className="text-[11px] text-[var(--color-neutral-500)] italic">
+            +{extra} more item{extra > 1 ? "s" : ""}
+          </div>
+        )}
       </div>
-      <div className="text-[11px] text-[var(--color-neutral-500)] flex justify-between items-center">
-        <span>{order.date}</span>
+
+      <div className="text-[11px] text-[var(--color-neutral-500)] flex justify-between items-center pt-1 border-t border-[var(--color-divider)]">
+        <span>
+          {order.date} · {productionStatusWord}
+        </span>
         <span className="font-medium text-[var(--color-text)]">{order.amountFormatted}</span>
-      </div>
-      <div className="pt-1 border-t border-[var(--color-divider)]">
-        <OrderStageTracker status={order.status} variant="compact" />
       </div>
     </Card>
   );
 }
-

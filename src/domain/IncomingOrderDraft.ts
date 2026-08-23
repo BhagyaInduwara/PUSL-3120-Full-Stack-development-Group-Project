@@ -59,18 +59,13 @@ export class IncomingOrderDraft extends Entity {
 
   /**
    * Factory method: turns this draft into a real Order once approved.
-   * Only the first line item becomes the Order (Order is single-product,
-   * matching every other Order in the system) — additional line items are
-   * summarized into the qty for that product.
+   * Every line item on the draft becomes a line item on the Order.
    */
   toOrder(orderId: string, date: string): Order {
-    const primary = this.lineItems[0];
     return new Order({
       id: orderId,
       customer: this.customer,
-      product: primary.product,
-      qty: primary.qty,
-      price: primary.price,
+      lineItems: this.lineItems.map((li) => ({ ...li })),
       status: "Confirmed",
       date,
     });

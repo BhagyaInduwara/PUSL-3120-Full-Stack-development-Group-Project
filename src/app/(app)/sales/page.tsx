@@ -6,8 +6,9 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/icons";
-import { Order, type OrderStatus } from "@/domain/Order";
+import { Order, type OrderStatus, type OrderLineItem, type OrderEditableFields } from "@/domain/Order";
 import { IncomingOrderDraft, type DraftLineItem } from "@/domain/IncomingOrderDraft";
+import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 import { OrderBoard } from "@/components/sales/OrderBoard";
 import { OrderTable } from "@/components/sales/OrderTable";
 import { NewOrderDrawer } from "@/components/sales/NewOrderDrawer";
@@ -19,9 +20,7 @@ type View = "board" | "table";
 interface ApiOrder {
   _id: string;
   customer: string;
-  product: string;
-  qty: number;
-  price: number;
+  lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
 }
@@ -33,13 +32,20 @@ interface ApiDraft {
   lineItems: DraftLineItem[];
 }
 
+interface ApiProductionJob {
+  _id: string;
+  product: string;
+  qty: number;
+  due: string;
+  status: JobStatus;
+  progress?: number;
+}
+
 function toOrder(o: ApiOrder): Order {
   return new Order({
     id: o._id,
     customer: o.customer,
-    product: o.product,
-    qty: o.qty,
-    price: o.price,
+    lineItems: o.lineItems,
     status: o.status,
     date: new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
   });
@@ -51,6 +57,17 @@ function toDraft(d: ApiDraft): IncomingOrderDraft {
     customer: d.customer,
     emailSubject: d.emailSubject,
     lineItems: d.lineItems,
+  });
+}
+
+function toJob(j: ApiProductionJob): ProductionJob {
+  return new ProductionJob({
+    id: j._id,
+    product: j.product,
+    qty: j.qty,
+    due: j.due,
+    status: j.status,
+    progress: j.progress,
   });
 }
 
@@ -68,8 +85,16 @@ async function fetchFirstDraft(): Promise<IncomingOrderDraft | null> {
   return drafts.length > 0 ? toDraft(drafts[0]) : null;
 }
 
+async function fetchJobs(): Promise<ProductionJob[]> {
+  const res = await fetch(`${API_URL}/api/production-jobs`, { credentials: "include" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.productionJobs as ApiProductionJob[]).map(toJob);
+}
+
 export default function SalesPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [jobs, setJobs] = useState<ProductionJob[]>([]);
   const [draft, setDraft] = useState<IncomingOrderDraft | null>(null);
   const [view, setView] = useState<View>("board");
   const [search, setSearch] = useState("");
@@ -80,6 +105,7 @@ export default function SalesPage() {
     (async () => {
       try {
         setOrders(await fetchOrders());
+        setJobs(await fetchJobs());
         setDraft(await fetchFirstDraft());
       } catch (error) {
         console.error("Error fetching orders:", error);
@@ -94,7 +120,7 @@ export default function SalesPage() {
       (o) =>
         o.id.toLowerCase().includes(q) ||
         o.customer.toLowerCase().includes(q) ||
-        o.product.toLowerCase().includes(q)
+        o.lineItems.some((li) => li.product.toLowerCase().includes(q))
     );
   }, [orders, search]);
 
@@ -112,9 +138,7 @@ export default function SalesPage() {
     }
   }
 
-  async function handleSaveOrder(
-    patch: Partial<{ customer: string; product: string; qty: number; price: number; date: string }>
-  ) {
+  async function handleSaveOrder(patch: Partial<OrderEditableFields>) {
     if (!selectedOrder) return;
     try {
       await fetch(`${API_URL}/api/orders/${selectedOrder.id}`, {
@@ -125,9 +149,7 @@ export default function SalesPage() {
         // are sent as-is (status included) rather than left undefined.
         body: JSON.stringify({
           customer: patch.customer ?? selectedOrder.customer,
-          product: patch.product ?? selectedOrder.product,
-          qty: patch.qty ?? selectedOrder.qty,
-          price: patch.price ?? selectedOrder.price.dollars,
+          lineItems: patch.lineItems ?? selectedOrder.lineItems,
           status: selectedOrder.status,
           date: patch.date ?? selectedOrder.date,
         }),
@@ -204,7 +226,7 @@ export default function SalesPage() {
           {view === "table" ? (
             <OrderTable orders={filtered} onSelect={setSelectedOrder} />
           ) : (
-            <OrderBoard orders={filtered} onMove={handleMove} onSelect={setSelectedOrder} />
+            <OrderBoard orders={filtered} jobs={jobs} onMove={handleMove} onSelect={setSelectedOrder} />
           )}
         </div>
 

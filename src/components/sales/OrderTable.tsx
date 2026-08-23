@@ -6,9 +6,9 @@ import { OrderStageTracker } from "./OrderStageTracker";
 const columns: Column<Order>[] = [
   { header: "Order", cell: (o) => <span className="font-semibold">{o.id}</span> },
   { header: "Customer", cell: (o) => o.customer },
-  { header: "Product", cell: (o) => o.product },
-  { header: "Qty", cell: (o) => o.qty },
-  { header: "Price", cell: (o) => o.priceFormatted },
+  { header: "Items", cell: (o) => o.itemsSummary },
+  { header: "Total Qty", cell: (o) => o.totalQty, className: "text-right" },
+  { header: "Amount", cell: (o) => o.amountFormatted, className: "text-right font-semibold" },
   { header: "Date", cell: (o) => o.date, className: "text-[var(--color-neutral-500)]" },
   { header: "Status", cell: (o) => <StatusTag entity={o} /> },
   {

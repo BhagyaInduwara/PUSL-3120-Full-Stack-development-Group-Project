@@ -19,18 +19,13 @@ const orderColumns: Column<Order>[] = [
     cell: (o) => <span className="font-semibold text-[var(--color-accent)]">{o.id}</span>,
   },
   {
-    header: "Product",
-    cell: (o) => o.product,
+    header: "Items",
+    cell: (o) => o.itemsSummary,
   },
   {
-    header: "Qty",
-    cell: (o) => o.qty,
+    header: "Total Qty",
+    cell: (o) => o.totalQty,
     className: "text-right",
-  },
-  {
-    header: "Unit Price",
-    cell: (o) => o.priceFormatted,
-    className: "text-right text-[var(--color-neutral-500)]",
   },
   {
     header: "Amount",

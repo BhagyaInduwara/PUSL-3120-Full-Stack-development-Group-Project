@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import { notFound } from "next/navigation";
 import { CustomerDetail } from "@/components/settings/CustomerDetail";
 import { Customer } from "@/domain/Customer";
-import { Order, type OrderStatus } from "@/domain/Order";
+import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 
 const API_URL = "http://localhost:4000";
 
@@ -15,9 +15,7 @@ interface CustomerDetailPageProps {
 interface ApiOrder {
   _id: string;
   customer: string;
-  product: string;
-  qty: number;
-  price: number;
+  lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
 }
@@ -26,9 +24,7 @@ function toOrder(o: ApiOrder): Order {
   return new Order({
     id: o._id,
     customer: o.customer,
-    product: o.product,
-    qty: o.qty,
-    price: o.price,
+    lineItems: o.lineItems,
     status: o.status,
     date: new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
   });

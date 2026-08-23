@@ -73,16 +73,16 @@ const INVENTORY_SEED = [
 ];
 
 const ORDER_SEED = [
-  { seedId: "ORD-1036", customer: "Bluepeak Coworking", product: "Task Chair – Mesh Back", qty: 24, price: 145, status: "Closed", date: "Jul 18" },
-  { seedId: "ORD-1038", customer: "Crestwood Architects", product: "Conference Table – 8ft", qty: 2, price: 1240, status: "Shipped", date: "Jul 25" },
-  { seedId: "ORD-1039", customer: "Harborline Logistics", product: "Filing Cabinet – 2 Drawer", qty: 15, price: 210, status: "Shipped", date: "Jul 28" },
-  { seedId: "ORD-1040", customer: "Union Square Café Co.", product: "Reception Desk – L-Shape", qty: 1, price: 980, status: "Invoiced", date: "Jul 30" },
-  { seedId: "ORD-1041", customer: "Meridian Dental Group", product: "Ergonomic Chair – Black", qty: 8, price: 210, status: "Invoiced", date: "Aug 1" },
-  { seedId: "ORD-1042", customer: "Foothill Realty Partners", product: "Executive Desk – Walnut", qty: 5, price: 890, status: "Confirmed", date: "Aug 3" },
-  { seedId: "ORD-1043", customer: "Bluepeak Coworking", product: "3-Shelf Bookcase – Oak", qty: 10, price: 175, status: "Confirmed", date: "Aug 4" },
-  { seedId: "ORD-1044", customer: "Crestwood Architects", product: "Storage Locker – Steel", qty: 20, price: 130, status: "Confirmed", date: "Aug 5" },
-  { seedId: "ORD-1045", customer: "Harborline Logistics", product: "Task Chair – Mesh Back", qty: 30, price: 145, status: "Draft", date: "Aug 6" },
-  { seedId: "ORD-1046", customer: "Meridian Dental Group", product: "Reception Desk – L-Shape", qty: 2, price: 980, status: "Draft", date: "Aug 6" },
+  { seedId: "ORD-1036", customer: "Bluepeak Coworking", lineItems: [{ product: "Task Chair – Mesh Back", qty: 24, price: 145 }], status: "Closed", date: "Jul 18" },
+  { seedId: "ORD-1038", customer: "Crestwood Architects", lineItems: [{ product: "Conference Table – 8ft", qty: 2, price: 1240 }], status: "Shipped", date: "Jul 25" },
+  { seedId: "ORD-1039", customer: "Harborline Logistics", lineItems: [{ product: "Filing Cabinet – 2 Drawer", qty: 15, price: 210 }], status: "Shipped", date: "Jul 28" },
+  { seedId: "ORD-1040", customer: "Union Square Café Co.", lineItems: [{ product: "Reception Desk – L-Shape", qty: 1, price: 980 }], status: "Invoiced", date: "Jul 30" },
+  { seedId: "ORD-1041", customer: "Meridian Dental Group", lineItems: [{ product: "Ergonomic Chair – Black", qty: 8, price: 210 }], status: "Invoiced", date: "Aug 1" },
+  { seedId: "ORD-1042", customer: "Foothill Realty Partners", lineItems: [{ product: "Executive Desk – Walnut", qty: 5, price: 890 }], status: "Confirmed", date: "Aug 3" },
+  { seedId: "ORD-1043", customer: "Bluepeak Coworking", lineItems: [{ product: "3-Shelf Bookcase – Oak", qty: 10, price: 175 }], status: "Confirmed", date: "Aug 4" },
+  { seedId: "ORD-1044", customer: "Crestwood Architects", lineItems: [{ product: "Storage Locker – Steel", qty: 20, price: 130 }], status: "Confirmed", date: "Aug 5" },
+  { seedId: "ORD-1045", customer: "Harborline Logistics", lineItems: [{ product: "Task Chair – Mesh Back", qty: 30, price: 145 }], status: "Draft", date: "Aug 6" },
+  { seedId: "ORD-1046", customer: "Meridian Dental Group", lineItems: [{ product: "Reception Desk – L-Shape", qty: 2, price: 980 }], status: "Draft", date: "Aug 6" },
 ] as const;
 
 const INCOMING_DRAFT_SEED = {
@@ -141,9 +141,7 @@ async function main() {
   for (const o of ORDER_SEED) {
     const order = await Order.create({
       customer: o.customer,
-      product: o.product,
-      qty: o.qty,
-      price: o.price,
+      lineItems: o.lineItems,
       status: o.status,
       date: parseDate(o.date),
     });

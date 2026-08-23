@@ -553,15 +553,19 @@ Unlike Customer/Product/Supplier, order responses are **bare objects/arrays**,
 not wrapped in an `{ orders: [...] }` envelope.
 
 ```typescript
-interface OrderRecord {
-  _id: string;                 // MongoDB ObjectId — not remapped to "id"
-  customer: string;            // required
+interface OrderLineItem {
   product: string;             // required
   qty: number;                 // required, min 1
   price: number;                // required, min 0
+}
+
+interface OrderRecord {
+  _id: string;                 // MongoDB ObjectId — not remapped to "id"
+  customer: string;            // required
+  lineItems: OrderLineItem[];   // required, at least 1 item
   status: "Draft" | "Confirmed" | "Invoiced" | "Shipped" | "Closed";
   date: string;                 // ISO 8601
-  amount: number;               // virtual: qty * price
+  amount: number;               // virtual: sum(qty * price) across lineItems
   createdAt: string;
   updatedAt: string;
 }
@@ -574,7 +578,8 @@ Lists every order, newest first. **Access**: Authenticated. **Response `200`**: 
 **Access**: Authenticated. **Response `200`**: `OrderRecord`. **`404`**: Order not found.
 
 #### `POST /api/orders`
-**Access**: Authenticated. **Body**: `{ customer, product, qty, price, status?, date }`. **Response `201`**: `OrderRecord`.
+**Access**: Authenticated. **Body**: `{ customer, lineItems, status?, date }`. **Response `201`**: `OrderRecord`.
+**`400`**: `lineItems` missing/empty or any item invalid (`product` not a string, `qty < 1`, or `price < 0`).
 
 #### `PUT /api/orders/:id`
 Full-record update (Mongoose schema validation applies). **Response `200`**: `OrderRecord`. **`404`**: not found.
@@ -603,8 +608,9 @@ human review before it becomes a real Order.
 **Response `200`**: `{ "ok": true }`.
 
 #### `POST /api/order-drafts/:id/approve`
-Factory-method endpoint: converts the draft's first line item into a real
-`Order` (`status: "Confirmed"`), deletes the draft, and returns the new order.
+Factory-method endpoint: converts every one of the draft's line items into
+a real `Order`'s line items (`status: "Confirmed"`), deletes the draft, and
+returns the new order.
 
 - **Response `201 Created`**: `OrderRecord` (bare, see 4.6).
 - **Response `400 Bad Request`**: draft has no line items.

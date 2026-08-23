@@ -11,7 +11,7 @@ import { TopProductsCard, type TopProductItem } from "@/components/dashboard/Top
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { ACTIVITY_FEED_SEED, REVENUE_SERIES_SEED } from "@/repositories/seed-data";
 import { PendingOrdersIcon, ProductionIcon, ShipmentIcon, LowStockIcon } from "@/components/icons";
-import { Order, type OrderStatus } from "@/domain/Order";
+import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 import { InventoryItem } from "@/domain/InventoryItem";
 import { Money } from "@/domain/Money";
@@ -28,9 +28,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 interface ApiOrder {
   _id: string;
   customer: string;
-  product: string;
-  qty: number;
-  price: number;
+  lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
 }
@@ -66,9 +64,7 @@ function toOrder(o: ApiOrder): Order {
   return new Order({
     id: o._id,
     customer: o.customer,
-    product: o.product,
-    qty: o.qty,
-    price: o.price,
+    lineItems: o.lineItems,
     status: o.status,
     date: new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
   });
@@ -136,13 +132,15 @@ export default function DashboardPage() {
   const shipmentsTodayCount = shipments.filter((s) => s.status === "Packed" || s.status === "Dispatched").length;
   const lowStockCount = inventory.filter((i) => i.isLow).length;
 
-  const totalSalesUnits = orders.reduce((sum, o) => sum + o.qty, 0);
+  const totalSalesUnits = orders.reduce((sum, o) => sum + o.totalQty, 0);
 
   const categoryUnits: Record<string, number> = { Seating: 0, Storage: 0, Desks: 0, Tables: 0 };
   for (const order of orders) {
-    const product = products.find((p) => p.name === order.product);
-    const category = product?.category ?? "Storage";
-    categoryUnits[category] = (categoryUnits[category] ?? 0) + order.qty;
+    for (const li of order.lineItems) {
+      const product = products.find((p) => p.name === li.product);
+      const category = product?.category ?? "Storage";
+      categoryUnits[category] = (categoryUnits[category] ?? 0) + li.qty;
+    }
   }
   const categoryTotal = Object.values(categoryUnits).reduce((sum, u) => sum + u, 0) || 1;
   const salesByCategory: CategorySalesItem[] = Object.entries(categoryUnits).map(([category, units]) => ({
@@ -154,9 +152,11 @@ export default function DashboardPage() {
 
   const productStats: Record<string, { units: number; revenue: Money }> = {};
   for (const order of orders) {
-    if (!productStats[order.product]) productStats[order.product] = { units: 0, revenue: Money.zero() };
-    productStats[order.product].units += order.qty;
-    productStats[order.product].revenue = productStats[order.product].revenue.add(order.amount);
+    for (const li of order.lineItems) {
+      if (!productStats[li.product]) productStats[li.product] = { units: 0, revenue: Money.zero() };
+      productStats[li.product].units += li.qty;
+      productStats[li.product].revenue = productStats[li.product].revenue.add(new Money(li.qty * li.price));
+    }
   }
   const topProducts: TopProductItem[] = Object.entries(productStats)
     .map(([name, stats]) => {

@@ -1,6 +1,31 @@
 import type { Request, Response } from "express";
 import { Order, ORDER_STATUSES, type OrderStatus } from "../models/Order.js";
 
+interface OrderLineItemBody {
+  product: string;
+  qty: number;
+  price: number;
+}
+
+function isValidLineItems(value: unknown): value is OrderLineItemBody[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((li) => {
+      const item = li as Record<string, unknown>;
+      return (
+        li &&
+        typeof li === "object" &&
+        typeof item.product === "string" &&
+        typeof item.qty === "number" &&
+        item.qty >= 1 &&
+        typeof item.price === "number" &&
+        item.price >= 0
+      );
+    })
+  );
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/orders
 // Returns every order in the database, newest first.
@@ -30,6 +55,11 @@ export async function getOrder(req: Request, res: Response): Promise<void> {
 // Creates a new order from the JSON body the client sends.
 // ---------------------------------------------------------------------------
 export async function createOrder(req: Request, res: Response): Promise<void> {
+  if (!isValidLineItems(req.body?.lineItems)) {
+    res.status(400).json({ error: "lineItems must be a non-empty array of { product, qty >= 1, price >= 0 }." });
+    return;
+  }
+
   const order = await Order.create(req.body);
   res.status(201).json(order);
 }
@@ -39,6 +69,11 @@ export async function createOrder(req: Request, res: Response): Promise<void> {
 // Replaces editable fields with the values from req.body.
 // ---------------------------------------------------------------------------
 export async function updateOrder(req: Request, res: Response): Promise<void> {
+  if (req.body?.lineItems !== undefined && !isValidLineItems(req.body.lineItems)) {
+    res.status(400).json({ error: "lineItems must be a non-empty array of { product, qty >= 1, price >= 0 }." });
+    return;
+  }
+
   const order = await Order.findByIdAndUpdate(
     req.params.id,
     req.body,

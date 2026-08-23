@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { InvoiceTable } from "@/components/invoicing/InvoiceTable";
 import { InvoiceDetailDialog } from "@/components/invoicing/InvoiceDetailDialog";
 import { Invoice, type InvoiceEditableFields, type InvoiceStatus } from "@/domain/Invoice";
-import { Order, type OrderStatus } from "@/domain/Order";
+import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 
 const API_URL = "http://localhost:4000";
 
@@ -19,9 +19,7 @@ function fmtDate(value: string): string {
 interface ApiOrderEmbed {
   id: string;
   customer: string;
-  product: string;
-  qty: number;
-  price: number;
+  lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
 }
@@ -39,9 +37,7 @@ function toOrder(o: ApiOrderEmbed): Order {
   return new Order({
     id: o.id,
     customer: o.customer,
-    product: o.product,
-    qty: o.qty,
-    price: o.price,
+    lineItems: o.lineItems,
     status: o.status,
     date: fmtDate(o.date),
   });
