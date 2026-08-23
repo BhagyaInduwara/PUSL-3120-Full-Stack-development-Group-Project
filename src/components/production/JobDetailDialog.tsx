@@ -32,7 +32,7 @@ export function JobDetailDialog({ job, onClose, onSave }: JobDetailDialogProps) 
 
   return (
     <RecordDialog
-      title={job.id}
+      title={job.number}
       subtitle={`Production job · ${job.product}`}
       statusBadge={<Tag variant={STATUS_VARIANT[job.status]}>{job.status}</Tag>}
       editable={job.canEdit}

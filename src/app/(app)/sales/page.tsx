@@ -13,6 +13,7 @@ import { OrderBoard } from "@/components/sales/OrderBoard";
 import { OrderTable } from "@/components/sales/OrderTable";
 import { NewOrderDrawer } from "@/components/sales/NewOrderDrawer";
 import { OrderDetailDialog } from "@/components/sales/OrderDetailDialog";
+import { PendingMoveBanner } from "@/components/sales/PendingMoveBanner";
 
 const API_URL = "http://localhost:4000";
 type View = "board" | "table";
@@ -35,6 +36,7 @@ interface ApiDraft {
 
 interface ApiProductionJob {
   _id: string;
+  number: string;
   product: string;
   qty: number;
   due: string;
@@ -65,6 +67,7 @@ function toDraft(d: ApiDraft): IncomingOrderDraft {
 function toJob(j: ApiProductionJob): ProductionJob {
   return new ProductionJob({
     id: j._id,
+    number: j.number,
     product: j.product,
     qty: j.qty,
     due: j.due,
@@ -102,6 +105,9 @@ export default function SalesPage() {
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ orderId: string; fromStatus: OrderStatus; toStatus: OrderStatus } | null>(
+    null
+  );
 
   useEffect(() => {
     (async () => {
@@ -126,14 +132,34 @@ export default function SalesPage() {
     );
   }, [orders, search]);
 
-  async function handleMove(orderId: string, status: OrderStatus) {
+  /** Dragging a card only stages the move — see PendingMoveBanner. Nothing is sent to the server until handleSaveMove. */
+  function handleMove(orderId: string, toStatus: OrderStatus) {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+
+    // Dropped back onto its own real column — same as clicking Undo.
+    if (toStatus === order.status) {
+      setPendingMove(null);
+      return;
+    }
+
+    setPendingMove({ orderId, fromStatus: order.status, toStatus });
+  }
+
+  function handleUndoMove() {
+    setPendingMove(null);
+  }
+
+  async function handleSaveMove() {
+    if (!pendingMove) return;
     try {
-      await fetch(`${API_URL}/api/orders/${orderId}/status`, {
+      await fetch(`${API_URL}/api/orders/${pendingMove.orderId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: pendingMove.toStatus }),
       });
+      setPendingMove(null);
       setOrders(await fetchOrders());
     } catch (error) {
       console.error("Error updating order status:", error);
@@ -228,7 +254,13 @@ export default function SalesPage() {
           {view === "table" ? (
             <OrderTable orders={filtered} onSelect={setSelectedOrder} />
           ) : (
-            <OrderBoard orders={filtered} jobs={jobs} onMove={handleMove} onSelect={setSelectedOrder} />
+            <OrderBoard
+              orders={filtered}
+              jobs={jobs}
+              pendingMove={pendingMove ? { orderId: pendingMove.orderId, status: pendingMove.toStatus } : null}
+              onMove={handleMove}
+              onSelect={setSelectedOrder}
+            />
           )}
         </div>
 
@@ -245,6 +277,20 @@ export default function SalesPage() {
           <OrderDetailDialog order={selectedOrder} onClose={() => setSelectedOrder(null)} onSave={handleSaveOrder} />
         )}
       </div>
+
+      {pendingMove &&
+        (() => {
+          const order = orders.find((o) => o.id === pendingMove.orderId);
+          return order ? (
+            <PendingMoveBanner
+              order={order}
+              fromStatus={pendingMove.fromStatus}
+              toStatus={pendingMove.toStatus}
+              onSave={handleSaveMove}
+              onUndo={handleUndoMove}
+            />
+          ) : null;
+        })()}
     </>
   );
 }

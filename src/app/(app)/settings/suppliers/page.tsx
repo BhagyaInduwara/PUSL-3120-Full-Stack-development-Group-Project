@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Table, type Column } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { AddSupplierDialog, type AddSupplierData } from "@/components/settings/AddSupplierDialog";
+import { SupplierDetailDialog, type SupplierEditableFields } from "@/components/settings/SupplierDetailDialog";
 import { Supplier } from "@/domain/Supplier";
 
 const API_URL = "http://localhost:4000";
@@ -37,6 +38,7 @@ const columns: Column<Supplier>[] = [
 export default function SuppliersSettingsPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -63,6 +65,22 @@ export default function SuppliersSettingsPage() {
     }
   }
 
+  async function handleSaveSupplier(patch: SupplierEditableFields) {
+    if (!selectedSupplier) return;
+    try {
+      await fetch(`${API_URL}/api/suppliers/${selectedSupplier.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(patch),
+      });
+      setSelectedSupplier(null);
+      setSuppliers(await fetchSuppliers());
+    } catch (error) {
+      console.error("Error saving supplier:", error);
+    }
+  }
+
   return (
     <>
       <div className="flex justify-end mb-3">
@@ -70,9 +88,17 @@ export default function SuppliersSettingsPage() {
           Add supplier
         </Button>
       </div>
-      <Table columns={columns} rows={suppliers} rowKey={(s) => s.id} />
+      <Table columns={columns} rows={suppliers} rowKey={(s) => s.id} onRowClick={setSelectedSupplier} />
 
       {dialogOpen && <AddSupplierDialog onClose={() => setDialogOpen(false)} onSubmit={handleAddSupplier} />}
+
+      {selectedSupplier && (
+        <SupplierDetailDialog
+          supplier={selectedSupplier}
+          onClose={() => setSelectedSupplier(null)}
+          onSave={handleSaveSupplier}
+        />
+      )}
     </>
   );
 }
