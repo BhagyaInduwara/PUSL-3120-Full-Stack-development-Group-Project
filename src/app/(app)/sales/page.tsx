@@ -19,6 +19,7 @@ type View = "board" | "table";
 
 interface ApiOrder {
   _id: string;
+  number: string;
   customer: string;
   lineItems: OrderLineItem[];
   status: OrderStatus;
@@ -44,6 +45,7 @@ interface ApiProductionJob {
 function toOrder(o: ApiOrder): Order {
   return new Order({
     id: o._id,
+    number: o.number,
     customer: o.customer,
     lineItems: o.lineItems,
     status: o.status,
@@ -118,7 +120,7 @@ export default function SalesPage() {
     if (!q) return orders;
     return orders.filter(
       (o) =>
-        o.id.toLowerCase().includes(q) ||
+        o.number.toLowerCase().includes(q) ||
         o.customer.toLowerCase().includes(q) ||
         o.lineItems.some((li) => li.product.toLowerCase().includes(q))
     );

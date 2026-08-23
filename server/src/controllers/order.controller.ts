@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { Order, ORDER_STATUSES, type OrderStatus } from "../models/Order.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
 
 interface OrderLineItemBody {
   product: string;
@@ -60,7 +61,8 @@ export async function createOrder(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const order = await Order.create(req.body);
+  const number = await generateRecordNumber("order", new Date());
+  const order = await Order.create({ ...req.body, number });
   res.status(201).json(order);
 }
 
@@ -74,9 +76,13 @@ export async function updateOrder(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // number is assigned once at creation and never client-editable — strip it
+  // even if a PUT body includes one, rather than trust the caller.
+  const { number: _ignoredNumber, ...editableFields } = req.body ?? {};
+
   const order = await Order.findByIdAndUpdate(
     req.params.id,
-    req.body,
+    editableFields,
     {
       new: true,           // return the document AFTER the update
       runValidators: true, // re-run schema validators on the new values

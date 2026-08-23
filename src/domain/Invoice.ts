@@ -4,6 +4,8 @@ export type InvoiceStatus = "Draft" | "Sent" | "Paid" | "Overdue";
 
 export interface InvoiceProps {
   id: string;
+  /** Human-readable display id, e.g. "2026/08/23/A001" — distinct from `id` (the Mongo ObjectId used for routing/API calls). */
+  number: string;
   orderId: string;
   status: InvoiceStatus;
   issueDate: string;
@@ -19,6 +21,7 @@ export interface InvoiceEditableFields {
  *  by joining with Order in InvoicingService, so Invoice never goes stale
  *  relative to the order it bills. */
 export class Invoice extends StatusfulEntity {
+  readonly number: string;
   readonly orderId: string;
   private _issueDate: string;
   private _dueDate: string;
@@ -26,6 +29,7 @@ export class Invoice extends StatusfulEntity {
 
   constructor(props: InvoiceProps) {
     super(props.id);
+    this.number = props.number;
     this.orderId = props.orderId;
     this._issueDate = props.issueDate;
     this._dueDate = props.dueDate;

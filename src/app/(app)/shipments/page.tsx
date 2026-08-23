@@ -18,6 +18,7 @@ function fmtDate(value: string): string {
 
 interface ApiOrderEmbed {
   id: string;
+  number: string;
   customer: string;
   lineItems: OrderLineItem[];
   status: OrderStatus;
@@ -26,6 +27,7 @@ interface ApiOrderEmbed {
 
 interface ApiShipment {
   id: string;
+  number: string;
   orderId: string;
   order?: ApiOrderEmbed;
   invoiceId: string | null;
@@ -36,6 +38,7 @@ interface ApiShipment {
 function toOrder(o: ApiOrderEmbed): Order {
   return new Order({
     id: o.id,
+    number: o.number,
     customer: o.customer,
     lineItems: o.lineItems,
     status: o.status,
@@ -46,6 +49,7 @@ function toOrder(o: ApiOrderEmbed): Order {
 function toShipment(s: ApiShipment): Shipment {
   return new Shipment({
     id: s.id,
+    number: s.number,
     orderId: s.orderId,
     invoiceId: s.invoiceId,
     status: s.status,
@@ -115,6 +119,7 @@ export default function ShipmentsPage() {
         <ShipmentDetailDialog
           shipment={selectedShipment}
           customer={orderById.get(selectedShipment.orderId)?.customer ?? "—"}
+          orderNumber={orderById.get(selectedShipment.orderId)?.number ?? selectedShipment.orderId}
           onClose={() => setSelectedShipment(null)}
           onSave={handleSave}
         />

@@ -20,7 +20,7 @@ export function OrderCard({ order, productionStatusWord, onDragStart, onClick }:
   return (
     <Card draggable onDragStart={onDragStart} onClick={onClick} elevation="sm" className="cursor-grab gap-2">
       <div className="flex justify-between items-center">
-        <span className="text-xs font-semibold">{order.id}</span>
+        <span className="text-xs font-semibold">{order.number}</span>
         <StatusTag entity={order} />
       </div>
       <div className="text-[13px] font-medium">{order.customer}</div>

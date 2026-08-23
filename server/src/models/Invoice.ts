@@ -6,6 +6,10 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
 const invoiceSchema = new Schema(
   {
+    // Human-readable display id, e.g. "2026/08/23/A001" — see
+    // ../utils/recordNumber.ts. Assigned once at creation, immutable after.
+    number: { type: String, required: true, unique: true },
+
     orderId: { type: Schema.Types.ObjectId, ref: "Order", required: true },
     status: { type: String, enum: INVOICE_STATUSES, default: "Draft" },
     issueDate: { type: Date },
@@ -24,6 +28,7 @@ export function toPublicInvoice(invoice: InvoiceDocument) {
 
   return {
     id: invoice._id.toString(),
+    number: invoice.number,
     orderId: orderPopulated ? (orderVal as OrderDocument)._id.toString() : (orderVal as Types.ObjectId).toString(),
     order: orderPopulated ? toPublicOrder(orderVal as OrderDocument) : undefined,
     status: invoice.status,

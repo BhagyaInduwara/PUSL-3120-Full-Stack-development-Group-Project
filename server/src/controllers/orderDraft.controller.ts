@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { IncomingOrderDraft } from "../models/IncomingOrderDraft.js";
 import { Order } from "../models/Order.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
 
 // ---------------------------------------------------------------------------
 // GET /api/order-drafts
@@ -88,7 +89,9 @@ export async function approveDraft(req: Request, res: Response): Promise<void> {
   }
 
   // Create the Order — status "Confirmed" because a human has reviewed it
+  const number = await generateRecordNumber("order", new Date());
   const order = await Order.create({
+    number,
     customer: draft.customer,
     lineItems: draft.lineItems.map((li) => ({ product: li.product, qty: li.qty, price: li.price })),
     status: "Confirmed",

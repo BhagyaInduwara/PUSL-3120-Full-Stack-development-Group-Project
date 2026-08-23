@@ -4,7 +4,7 @@ import { StatusTag } from "@/components/ui/Tag";
 import { OrderStageTracker } from "./OrderStageTracker";
 
 const columns: Column<Order>[] = [
-  { header: "Order", cell: (o) => <span className="font-semibold">{o.id}</span> },
+  { header: "Order", cell: (o) => <span className="font-semibold">{o.number}</span> },
   { header: "Customer", cell: (o) => o.customer },
   { header: "Items", cell: (o) => o.itemsSummary },
   { header: "Total Qty", cell: (o) => o.totalQty, className: "text-right" },

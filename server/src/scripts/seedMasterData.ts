@@ -22,6 +22,7 @@ import { Order } from "../models/Order.js";
 import { Invoice } from "../models/Invoice.js";
 import { Shipment } from "../models/Shipment.js";
 import { IncomingOrderDraft } from "../models/IncomingOrderDraft.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
 import InventoryItem from "../models/InventoryItem.js";
 import ProductionJob from "../models/ProductionJob.js";
 
@@ -140,6 +141,7 @@ async function main() {
   const orderIdBySeedId = new Map<string, mongoose.Types.ObjectId>();
   for (const o of ORDER_SEED) {
     const order = await Order.create({
+      number: await generateRecordNumber("order", new Date()),
       customer: o.customer,
       lineItems: o.lineItems,
       status: o.status,
@@ -157,6 +159,7 @@ async function main() {
     const orderId = orderIdBySeedId.get(i.orderSeedId);
     if (!orderId) continue;
     const invoice = await Invoice.create({
+      number: await generateRecordNumber("invoice", new Date()),
       orderId,
       status: i.status,
       issueDate: parseDate(i.issueDate),
@@ -170,6 +173,7 @@ async function main() {
     const orderId = orderIdBySeedId.get(s.orderSeedId);
     if (!orderId) continue;
     await Shipment.create({
+      number: await generateRecordNumber("shipment", new Date()),
       orderId,
       invoiceId: s.invoiceSeedId ? (invoiceIdBySeedId.get(s.invoiceSeedId) ?? null) : null,
       status: s.status,

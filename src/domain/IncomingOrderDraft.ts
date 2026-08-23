@@ -64,6 +64,7 @@ export class IncomingOrderDraft extends Entity {
   toOrder(orderId: string, date: string): Order {
     return new Order({
       id: orderId,
+      number: orderId,
       customer: this.customer,
       lineItems: this.lineItems.map((li) => ({ ...li })),
       status: "Confirmed",

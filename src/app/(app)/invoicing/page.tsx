@@ -18,6 +18,7 @@ function fmtDate(value: string): string {
 
 interface ApiOrderEmbed {
   id: string;
+  number: string;
   customer: string;
   lineItems: OrderLineItem[];
   status: OrderStatus;
@@ -26,6 +27,7 @@ interface ApiOrderEmbed {
 
 interface ApiInvoice {
   id: string;
+  number: string;
   orderId: string;
   order?: ApiOrderEmbed;
   status: InvoiceStatus;
@@ -36,6 +38,7 @@ interface ApiInvoice {
 function toOrder(o: ApiOrderEmbed): Order {
   return new Order({
     id: o.id,
+    number: o.number,
     customer: o.customer,
     lineItems: o.lineItems,
     status: o.status,
@@ -46,6 +49,7 @@ function toOrder(o: ApiOrderEmbed): Order {
 function toInvoice(i: ApiInvoice): Invoice {
   return new Invoice({
     id: i.id,
+    number: i.number,
     orderId: i.orderId,
     status: i.status,
     issueDate: fmtDate(i.issueDate),

@@ -16,7 +16,7 @@ import type { Customer } from "@/domain/Customer";
 const orderColumns: Column<Order>[] = [
   {
     header: "Order ID",
-    cell: (o) => <span className="font-semibold text-[var(--color-accent)]">{o.id}</span>,
+    cell: (o) => <span className="font-semibold text-[var(--color-accent)]">{o.number}</span>,
   },
   {
     header: "Items",

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Invoice, INVOICE_STATUSES, toPublicInvoice } from "../models/Invoice.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
 
 function isValidStatus(value: unknown): value is (typeof INVOICE_STATUSES)[number] {
   return typeof value === "string" && (INVOICE_STATUSES as readonly string[]).includes(value);
@@ -34,7 +35,9 @@ export async function createInvoice(req: Request, res: Response): Promise<void> 
     return;
   }
 
+  const number = await generateRecordNumber("invoice", new Date());
   const invoice = await Invoice.create({
+    number,
     orderId,
     status: req.body?.status,
     issueDate: req.body?.issueDate,

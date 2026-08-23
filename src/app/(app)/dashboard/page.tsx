@@ -27,6 +27,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 interface ApiOrder {
   _id: string;
+  number: string;
   customer: string;
   lineItems: OrderLineItem[];
   status: OrderStatus;
@@ -63,6 +64,7 @@ interface ApiProduct {
 function toOrder(o: ApiOrder): Order {
   return new Order({
     id: o._id,
+    number: o.number,
     customer: o.customer,
     lineItems: o.lineItems,
     status: o.status,

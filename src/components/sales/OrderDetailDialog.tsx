@@ -31,7 +31,7 @@ export function OrderDetailDialog({ order, onClose, onSave }: OrderDetailDialogP
 
   return (
     <RecordDialog
-      title={order.id}
+      title={order.number}
       subtitle={`Order · ${order.customer}`}
       statusBadge={<StatusTag entity={order} />}
       editable={order.canEdit}

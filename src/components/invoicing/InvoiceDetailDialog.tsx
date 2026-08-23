@@ -28,8 +28,8 @@ export function InvoiceDetailDialog({ invoice, order, onClose, onSave, onMarkPai
 
   return (
     <RecordDialog
-      title={invoice.id}
-      subtitle={`Invoice · linked order ${invoice.orderId}`}
+      title={invoice.number}
+      subtitle={`Invoice · linked order ${order?.number ?? invoice.orderId}`}
       statusBadge={<StatusTag entity={invoice} />}
       editable={invoice.canEdit}
       onClose={onClose}

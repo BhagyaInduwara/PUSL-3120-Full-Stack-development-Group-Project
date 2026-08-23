@@ -19,6 +19,8 @@ export interface OrderLineItem {
 
 export interface OrderProps {
   id: string;
+  /** Human-readable display id, e.g. "2026/08/23/A001" — generated server-side, distinct from `id` (the Mongo ObjectId used for routing/API calls). */
+  number: string;
   customer: string;
   lineItems: OrderLineItem[];
   status: OrderStatus;
@@ -43,6 +45,7 @@ export interface OrderEditableFields {
  * where a draft's line items become an Order's line items 1:1.
  */
 export class Order extends StatusfulEntity {
+  readonly number: string;
   private _customer: string;
   private _lineItems: OrderLineItem[];
   private _date: string;
@@ -50,6 +53,7 @@ export class Order extends StatusfulEntity {
 
   constructor(props: OrderProps) {
     super(props.id);
+    this.number = props.number;
     this._customer = props.customer;
     this._lineItems = props.lineItems.map((li) => ({ ...li }));
     this._date = props.date;

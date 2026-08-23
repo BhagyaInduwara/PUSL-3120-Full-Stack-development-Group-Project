@@ -15,16 +15,16 @@ import type { ProductProps } from "@/domain/Product";
 import type { IncomingOrderDraftProps } from "@/domain/IncomingOrderDraft";
 
 export const ORDER_SEED: OrderProps[] = [
-  { id: "ORD-1036", customer: "Bluepeak Coworking", lineItems: [{ product: "Task Chair – Mesh Back", qty: 24, price: 145 }], status: "Closed", date: "Jul 18" },
-  { id: "ORD-1038", customer: "Crestwood Architects", lineItems: [{ product: "Conference Table – 8ft", qty: 2, price: 1240 }], status: "Shipped", date: "Jul 25" },
-  { id: "ORD-1039", customer: "Harborline Logistics", lineItems: [{ product: "Filing Cabinet – 2 Drawer", qty: 15, price: 210 }], status: "Shipped", date: "Jul 28" },
-  { id: "ORD-1040", customer: "Union Square Café Co.", lineItems: [{ product: "Reception Desk – L-Shape", qty: 1, price: 980 }], status: "Invoiced", date: "Jul 30" },
-  { id: "ORD-1041", customer: "Meridian Dental Group", lineItems: [{ product: "Ergonomic Chair – Black", qty: 8, price: 210 }], status: "Invoiced", date: "Aug 1" },
-  { id: "ORD-1042", customer: "Foothill Realty Partners", lineItems: [{ product: "Executive Desk – Walnut", qty: 5, price: 890 }], status: "Confirmed", date: "Aug 3" },
-  { id: "ORD-1043", customer: "Bluepeak Coworking", lineItems: [{ product: "3-Shelf Bookcase – Oak", qty: 10, price: 175 }], status: "Confirmed", date: "Aug 4" },
-  { id: "ORD-1044", customer: "Crestwood Architects", lineItems: [{ product: "Storage Locker – Steel", qty: 20, price: 130 }], status: "Confirmed", date: "Aug 5" },
-  { id: "ORD-1045", customer: "Harborline Logistics", lineItems: [{ product: "Task Chair – Mesh Back", qty: 30, price: 145 }], status: "Draft", date: "Aug 6" },
-  { id: "ORD-1046", customer: "Meridian Dental Group", lineItems: [{ product: "Reception Desk – L-Shape", qty: 2, price: 980 }], status: "Draft", date: "Aug 6" },
+  { id: "ORD-1036", number: "ORD-1036", customer: "Bluepeak Coworking", lineItems: [{ product: "Task Chair – Mesh Back", qty: 24, price: 145 }], status: "Closed", date: "Jul 18" },
+  { id: "ORD-1038", number: "ORD-1038", customer: "Crestwood Architects", lineItems: [{ product: "Conference Table – 8ft", qty: 2, price: 1240 }], status: "Shipped", date: "Jul 25" },
+  { id: "ORD-1039", number: "ORD-1039", customer: "Harborline Logistics", lineItems: [{ product: "Filing Cabinet – 2 Drawer", qty: 15, price: 210 }], status: "Shipped", date: "Jul 28" },
+  { id: "ORD-1040", number: "ORD-1040", customer: "Union Square Café Co.", lineItems: [{ product: "Reception Desk – L-Shape", qty: 1, price: 980 }], status: "Invoiced", date: "Jul 30" },
+  { id: "ORD-1041", number: "ORD-1041", customer: "Meridian Dental Group", lineItems: [{ product: "Ergonomic Chair – Black", qty: 8, price: 210 }], status: "Invoiced", date: "Aug 1" },
+  { id: "ORD-1042", number: "ORD-1042", customer: "Foothill Realty Partners", lineItems: [{ product: "Executive Desk – Walnut", qty: 5, price: 890 }], status: "Confirmed", date: "Aug 3" },
+  { id: "ORD-1043", number: "ORD-1043", customer: "Bluepeak Coworking", lineItems: [{ product: "3-Shelf Bookcase – Oak", qty: 10, price: 175 }], status: "Confirmed", date: "Aug 4" },
+  { id: "ORD-1044", number: "ORD-1044", customer: "Crestwood Architects", lineItems: [{ product: "Storage Locker – Steel", qty: 20, price: 130 }], status: "Confirmed", date: "Aug 5" },
+  { id: "ORD-1045", number: "ORD-1045", customer: "Harborline Logistics", lineItems: [{ product: "Task Chair – Mesh Back", qty: 30, price: 145 }], status: "Draft", date: "Aug 6" },
+  { id: "ORD-1046", number: "ORD-1046", customer: "Meridian Dental Group", lineItems: [{ product: "Reception Desk – L-Shape", qty: 2, price: 980 }], status: "Draft", date: "Aug 6" },
 ];
 
 export const INCOMING_DRAFT_SEED: IncomingOrderDraftProps = {
@@ -38,12 +38,12 @@ export const INCOMING_DRAFT_SEED: IncomingOrderDraftProps = {
 };
 
 export const INVOICE_SEED: InvoiceProps[] = [
-  { id: "INV-2039", orderId: "ORD-1036", status: "Paid", issueDate: "Jul 19", dueDate: "Aug 2" },
-  { id: "INV-2041", orderId: "ORD-1038", status: "Paid", issueDate: "Jul 26", dueDate: "Aug 9" },
-  { id: "INV-2042", orderId: "ORD-1039", status: "Sent", issueDate: "Jul 29", dueDate: "Aug 12" },
-  { id: "INV-2043", orderId: "ORD-1040", status: "Sent", issueDate: "Jul 31", dueDate: "Aug 14" },
-  { id: "INV-2044", orderId: "ORD-1041", status: "Overdue", issueDate: "Jul 20", dueDate: "Aug 3" },
-  { id: "INV-2045", orderId: "ORD-1042", status: "Draft", issueDate: "—", dueDate: "—" },
+  { id: "INV-2039", number: "INV-2039", orderId: "ORD-1036", status: "Paid", issueDate: "Jul 19", dueDate: "Aug 2" },
+  { id: "INV-2041", number: "INV-2041", orderId: "ORD-1038", status: "Paid", issueDate: "Jul 26", dueDate: "Aug 9" },
+  { id: "INV-2042", number: "INV-2042", orderId: "ORD-1039", status: "Sent", issueDate: "Jul 29", dueDate: "Aug 12" },
+  { id: "INV-2043", number: "INV-2043", orderId: "ORD-1040", status: "Sent", issueDate: "Jul 31", dueDate: "Aug 14" },
+  { id: "INV-2044", number: "INV-2044", orderId: "ORD-1041", status: "Overdue", issueDate: "Jul 20", dueDate: "Aug 3" },
+  { id: "INV-2045", number: "INV-2045", orderId: "ORD-1042", status: "Draft", issueDate: "—", dueDate: "—" },
 ];
 
 export const INVENTORY_SEED: InventoryItemProps[] = [
@@ -58,12 +58,12 @@ export const INVENTORY_SEED: InventoryItemProps[] = [
 ];
 
 export const SHIPMENT_SEED: ShipmentProps[] = [
-  { id: "SHP-501", orderId: "ORD-1036", invoiceId: "INV-2039", status: "Delivered", date: "Jul 22" },
-  { id: "SHP-502", orderId: "ORD-1038", invoiceId: "INV-2041", status: "Delivered", date: "Jul 29" },
-  { id: "SHP-503", orderId: "ORD-1039", invoiceId: "INV-2042", status: "Dispatched", date: "Aug 5" },
-  { id: "SHP-504", orderId: "ORD-1040", invoiceId: "INV-2043", status: "Packed", date: "Aug 6" },
-  { id: "SHP-505", orderId: "ORD-1041", invoiceId: "INV-2044", status: "Draft", date: "—" },
-  { id: "SHP-506", orderId: "ORD-1042", invoiceId: null, status: "Draft", date: "—" },
+  { id: "SHP-501", number: "SHP-501", orderId: "ORD-1036", invoiceId: "INV-2039", status: "Delivered", date: "Jul 22" },
+  { id: "SHP-502", number: "SHP-502", orderId: "ORD-1038", invoiceId: "INV-2041", status: "Delivered", date: "Jul 29" },
+  { id: "SHP-503", number: "SHP-503", orderId: "ORD-1039", invoiceId: "INV-2042", status: "Dispatched", date: "Aug 5" },
+  { id: "SHP-504", number: "SHP-504", orderId: "ORD-1040", invoiceId: "INV-2043", status: "Packed", date: "Aug 6" },
+  { id: "SHP-505", number: "SHP-505", orderId: "ORD-1041", invoiceId: "INV-2044", status: "Draft", date: "—" },
+  { id: "SHP-506", number: "SHP-506", orderId: "ORD-1042", invoiceId: null, status: "Draft", date: "—" },
 ];
 
 export const JOB_SEED: ProductionJobProps[] = [

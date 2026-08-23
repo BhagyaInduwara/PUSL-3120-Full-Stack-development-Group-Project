@@ -31,6 +31,11 @@ const lineItemSchema = new Schema({
 
 const orderSchema = new Schema(
   {
+    // Human-readable display id, e.g. "2026/08/23/A001" — see
+    // ../utils/recordNumber.ts. Assigned once at creation, immutable after
+    // (order.controller.ts's updateOrder strips it from PUT bodies).
+    number: { type: String, required: true, unique: true },
+
     customer: { type: String, trim: true },
 
     // An array of lineItemSchema sub-documents, embedded directly in this
@@ -90,6 +95,7 @@ export function toPublicOrder(order: OrderDocument) {
   const lineItems = (order.lineItems ?? []).map((li) => ({ product: li.product, qty: li.qty, price: li.price }));
   return {
     id: order._id.toString(),
+    number: order.number,
     customer: order.customer,
     lineItems,
     amount: lineItems.reduce((sum, li) => sum + li.qty * li.price, 0),
