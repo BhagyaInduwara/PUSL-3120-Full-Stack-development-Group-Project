@@ -4,6 +4,8 @@ export type ShipmentStatus = "Draft" | "Packed" | "Dispatched" | "Delivered";
 
 export interface ShipmentProps {
   id: string;
+  /** Human-readable display id, e.g. "2026/08/23/A001" — distinct from `id` (the Mongo ObjectId used for routing/API calls). */
+  number: string;
   orderId: string;
   invoiceId: string | null;
   status: ShipmentStatus;
@@ -15,6 +17,7 @@ export interface ShipmentEditableFields {
 }
 
 export class Shipment extends StatusfulEntity {
+  readonly number: string;
   readonly orderId: string;
   readonly invoiceId: string | null;
   private _date: string;
@@ -22,6 +25,7 @@ export class Shipment extends StatusfulEntity {
 
   constructor(props: ShipmentProps) {
     super(props.id);
+    this.number = props.number;
     this.orderId = props.orderId;
     this.invoiceId = props.invoiceId;
     this._date = props.date;

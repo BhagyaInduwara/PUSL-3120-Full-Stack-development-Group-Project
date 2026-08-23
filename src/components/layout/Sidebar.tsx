@@ -2,7 +2,7 @@
 
 import { useState, type ComponentType, type SVGProps } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   DashboardIcon,
   SalesIcon,
@@ -11,7 +11,9 @@ import {
   ShipmentIcon,
   ProductionIcon,
   SettingsIcon,
+  LogoutIcon,
 } from "@/components/icons";
+import type { PublicUser } from "@/domain/User";
 
 interface NavItem {
   href: string;
@@ -28,15 +30,30 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/production", label: "Production", Icon: ProductionIcon },
 ];
 
+function initials(username: string): string {
+  return username.slice(0, 2).toUpperCase();
+}
+
 /**
  * Sidebar — self-contained: it owns its own collapsed/expanded state.
- * Because it's mounted once in the root layout (src/app/layout.tsx), that
- * state survives client-side navigation between pages without needing to
- * live in ERPStore — it's UI-only, not domain data.
+ * Because it's mounted once in (app)/layout.tsx, that state survives
+ * client-side navigation between pages without needing to live in
+ * ERPStore — it's UI-only, not domain data. `user` comes from the server
+ * (see (app)/layout.tsx's getSessionUser()) rather than being fetched
+ * client-side, so there's no logged-out flash on first paint.
  */
-export function Sidebar() {
+export function Sidebar({ user }: { user: PublicUser }) {
   const [expanded, setExpanded] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <div
@@ -99,20 +116,30 @@ export function Sidebar() {
         {expanded ? "«" : "»"}
       </button>
 
-      <div className="p-3 pt-3.5 border-t border-[var(--color-divider)]">
-        <div className="flex items-center gap-2.5">
-          <div className="w-[30px] h-[30px] flex-none rounded-full bg-[var(--color-neutral-800)] flex items-center justify-center text-xs font-semibold text-[var(--color-neutral-200)]">
-            DR
-          </div>
-          {expanded && (
-            <div className="min-w-0">
-              <div className="text-[13px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                Dana Reyes
-              </div>
-              <div className="text-[11px] text-[var(--color-neutral-500)]">Operations</div>
-            </div>
-          )}
+      <div className="p-3 pt-3.5 border-t border-[var(--color-divider)] flex items-center gap-2.5">
+        <div className="w-[30px] h-[30px] flex-none rounded-full bg-[var(--color-neutral-800)] flex items-center justify-center text-xs font-semibold text-[var(--color-neutral-200)]">
+          {initials(user.username)}
         </div>
+        {expanded && (
+          <>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis capitalize">
+                {user.username}
+              </div>
+              <div className="text-[11px] text-[var(--color-neutral-500)] capitalize">{user.role}</div>
+            </div>
+            <button
+              type="button"
+              title="Log out"
+              aria-label="Log out"
+              disabled={loggingOut}
+              onClick={handleLogout}
+              className="flex-none p-1.5 rounded-lg text-[var(--color-neutral-500)] hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] hover:text-[var(--color-text)] disabled:opacity-50"
+            >
+              <LogoutIcon width={16} height={16} />
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,0 +1,726 @@
+# FlowERP — API Specification & Contract
+
+This document serves as the formal API contract for the **FlowERP** backend services. It outlines the base configuration, authentication mechanisms, status codes, data models, and detailed endpoint request/response specifications for both the Express + Mongoose backend (`/server`) and Next.js Route Handlers.
+
+---
+
+## 1. System Overview & Architecture
+
+### Base URLs
+- **Express Backend (Primary API)**: `http://localhost:4000/api`
+- **Next.js Frontend / Prototype API**: `http://localhost:3000/api`
+
+### Content Type & Encoding
+- All request payloads must be JSON-formatted (`Content-Type: application/json`).
+- All response payloads are returned as JSON (`Content-Type: application/json; charset=utf-8`).
+
+### Authentication & Session Model
+Authentication is cookie-based via signed tokens stored in `httpOnly` HTTP cookies:
+- **Cookie Name**: `flowerp_token`
+- **Security Attributes**:
+  - `httpOnly: true` (Inaccessible to client-side JavaScript, mitigating XSS risks)
+  - `sameSite: "lax"` (Development) / `"none"` (Cross-domain HTTPS production)
+  - `secure: true` (Enforced in production HTTPS environments)
+  - `maxAge`: 604,800,000 ms (7 days)
+- **CORS Requirements**: Client `fetch()` requests must include `credentials: "include"`, and the backend configures `CORS` with `credentials: true` for `CLIENT_ORIGIN` (`http://localhost:3000`).
+
+---
+
+## 2. Standard HTTP Status Codes & Error Format
+
+### HTTP Status Codes
+
+| Code | Status | Description |
+|---|---|---|
+| `200` | OK | Request succeeded; response contains requested data. |
+| `201` | Created | Resource successfully created. |
+| `204` | No Content | Resource successfully deleted; no response body returned. |
+| `400` | Bad Request | Validation error or missing required fields. |
+| `401` | Unauthorized | Unauthenticated caller or invalid session cookie / credentials. |
+| `403` | Forbidden | Insufficient permissions (e.g., non-admin requesting admin route). |
+| `404` | Not Found | Resource or endpoint does not exist. |
+| `409` | Conflict | Duplicate entity field (e.g., username or product SKU already taken). |
+| `500` | Internal Server Error | Unhandled server exception. |
+
+### Standard Error Response Shape
+
+All error responses strictly follow a uniform error payload structure:
+
+```json
+{
+  "error": "Human-readable description of the error"
+}
+```
+
+---
+
+## 3. Data Models & Schemas
+
+### User Entity (`User`)
+Represents an administrative or staff user account.
+```typescript
+interface PublicUser {
+  id: string;          // MongoDB ObjectId string
+  username: string;    // Case-insensitive, unique, min 3 chars
+  role: "admin" | "staff";
+  createdAt: string;   // ISO 8601 Timestamp
+}
+```
+*Note: Password hashes (`passwordHash`) are excluded from queries by default and never exposed to the client.*
+
+### Customer Entity (`Customer`)
+```typescript
+interface Customer {
+  id: string;          // MongoDB ObjectId string
+  name: string;        // Required, non-empty
+  contact?: string;    // Optional contact person / title
+  email?: string;      // Optional email address
+  city?: string;       // Optional city location
+  createdAt: string;   // ISO 8601 Timestamp
+  updatedAt: string;   // ISO 8601 Timestamp
+}
+```
+
+### Product Entity (`Product`)
+```typescript
+interface Product {
+  id: string;          // MongoDB ObjectId string
+  sku: string;         // Required, unique, uppercase (e.g. "PROD-001")
+  name: string;        // Required, non-empty
+  category?: string;   // Optional category classification
+  price: number;       // Required numeric value >= 0
+  createdAt: string;   // ISO 8601 Timestamp
+  updatedAt: string;   // ISO 8601 Timestamp
+}
+```
+
+### Supplier Entity (`Supplier`)
+```typescript
+interface Supplier {
+  id: string;          // MongoDB ObjectId string
+  name: string;        // Required, non-empty
+  category?: string;   // Optional supplier domain/category
+  contact?: string;    // Optional contact details / email
+  leadTime?: string;   // Optional lead time string (e.g., "5 days")
+  createdAt: string;   // ISO 8601 Timestamp
+  updatedAt: string;   // ISO 8601 Timestamp
+}
+```
+
+---
+
+## 4. Endpoints Specification
+
+---
+
+### 4.1 Authentication Service (`/api/auth`)
+
+#### `POST /api/auth/register`
+Self-service user registration. Automatically assigns the `"staff"` role.
+
+- **Access Level**: Public
+- **Request Body**:
+  ```json
+  {
+    "username": "string (required, min 3 chars)",
+    "password": "string (required, min 6 chars)"
+  }
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "user": {
+      "id": "66c1f2e8a101b203c304d501",
+      "username": "johndoe",
+      "role": "staff",
+      "createdAt": "2026-08-17T15:30:00.000Z"
+    }
+  }
+  ```
+  *(Sets `flowerp_token` HTTP cookie)*
+- **Response `400 Bad Request`**: Username < 3 chars or Password < 6 chars.
+- **Response `409 Conflict`**: Username already taken.
+
+---
+
+#### `POST /api/auth/login`
+Authenticates user credentials and establishes a session. Constant-time password verification is used to protect against username enumeration attacks.
+
+- **Access Level**: Public
+- **Request Body**:
+  ```json
+  {
+    "username": "string (required)",
+    "password": "string (required)"
+  }
+  ```
+- **Response `200 OK`**:
+  ```json
+  {
+    "user": {
+      "id": "66c1f2e8a101b203c304d501",
+      "username": "admin",
+      "role": "admin",
+      "createdAt": "2026-08-17T15:30:00.000Z"
+    }
+  }
+  ```
+  *(Sets `flowerp_token` HTTP cookie)*
+- **Response `400 Bad Request`**: Missing username or password.
+- **Response `401 Unauthorized`**: Invalid username or password.
+
+---
+
+#### `POST /api/auth/logout`
+Terminates the active user session.
+
+- **Access Level**: Public / Authenticated
+- **Request Body**: None
+- **Response `200 OK`**:
+  ```json
+  {
+    "ok": true
+  }
+  ```
+  *(Clears `flowerp_token` HTTP cookie)*
+
+---
+
+#### `GET /api/auth/me`
+Fetches current authenticated user context from session cookie.
+
+- **Access Level**: Authenticated (`requireAuth`)
+- **Request Headers / Cookies**: Cookie `flowerp_token`
+- **Response `200 OK`**:
+  ```json
+  {
+    "user": {
+      "id": "66c1f2e8a101b203c304d501",
+      "username": "admin",
+      "role": "admin",
+      "createdAt": "2026-08-17T15:30:00.000Z"
+    }
+  }
+  ```
+- **Response `401 Unauthorized`**: Session token missing, expired, or user deleted.
+
+---
+
+### 4.2 User Management Service (`/api/users`)
+
+#### `GET /api/users`
+Retrieves a list of all accounts sorted by creation date ascending.
+
+- **Access Level**: Authenticated (`requireAuth`)
+- **Response `200 OK`**:
+  ```json
+  {
+    "users": [
+      {
+        "id": "66c1f2e8a101b203c304d501",
+        "username": "admin",
+        "role": "admin",
+        "createdAt": "2026-08-17T15:30:00.000Z"
+      },
+      {
+        "id": "66c1f2e8a101b203c304d502",
+        "username": "staff1",
+        "role": "staff",
+        "createdAt": "2026-08-17T16:00:00.000Z"
+      }
+    ]
+  }
+  ```
+- **Response `401 Unauthorized`**: Missing authentication.
+
+---
+
+#### `POST /api/users`
+Direct provisioning of user accounts by an administrator.
+
+- **Access Level**: Admin Only (`requireAuth` + `requireAdmin`)
+- **Request Body**:
+  ```json
+  {
+    "username": "string (required, min 3 chars)",
+    "password": "string (required, min 6 chars)",
+    "role": "admin | staff (optional, default: 'staff')"
+  }
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "user": {
+      "id": "66c1f2e8a101b203c304d503",
+      "username": "manager",
+      "role": "admin",
+      "createdAt": "2026-08-17T16:15:00.000Z"
+    }
+  }
+  ```
+- **Response `400 Bad Request`**: Validation error (short username/password).
+- **Response `401 Unauthorized`**: Missing authentication token.
+- **Response `403 Forbidden`**: Authenticated user is not an administrator.
+- **Response `409 Conflict`**: Username already exists.
+
+---
+
+### 4.3 Customer Management Service (`/api/customers`)
+
+#### `GET /api/customers`
+Retrieves all customer records sorted by creation date.
+
+- **Access Level**: Authenticated
+- **Response `200 OK`**:
+  ```json
+  {
+    "customers": [
+      {
+        "id": "66c1f2e8c101b203c304d601",
+        "name": "BluePeak Logistics",
+        "contact": "Sarah Jenkins",
+        "email": "sarah@bluepeak.com",
+        "city": "Chicago",
+        "createdAt": "2026-08-17T15:30:00.000Z",
+        "updatedAt": "2026-08-17T15:30:00.000Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+#### `GET /api/customers/:id`
+Retrieves a specific customer by ID.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Response `200 OK`**:
+  ```json
+  {
+    "customer": {
+      "id": "66c1f2e8c101b203c304d601",
+      "name": "BluePeak Logistics",
+      "contact": "Sarah Jenkins",
+      "email": "sarah@bluepeak.com",
+      "city": "Chicago",
+      "createdAt": "2026-08-17T15:30:00.000Z",
+      "updatedAt": "2026-08-17T15:30:00.000Z"
+    }
+  }
+  ```
+- **Response `404 Not Found`**: Customer record does not exist.
+
+---
+
+#### `POST /api/customers`
+Creates a new customer record.
+
+- **Access Level**: Authenticated
+- **Request Body**:
+  ```json
+  {
+    "name": "string (required)",
+    "contact": "string (optional)",
+    "email": "string (optional)",
+    "city": "string (optional)"
+  }
+  ```
+- **Response `201 Created`**:
+  ```json
+  {
+    "customer": {
+      "id": "66c1f2e8c101b203c304d602",
+      "name": "Apex Innovations",
+      "contact": "Mark Sloan",
+      "email": "mark@apex.io",
+      "city": "Seattle",
+      "createdAt": "2026-08-17T16:30:00.000Z",
+      "updatedAt": "2026-08-17T16:30:00.000Z"
+    }
+  }
+  ```
+- **Response `400 Bad Request`**: Missing `name` parameter.
+
+---
+
+#### `PUT /api/customers/:id`
+Partially updates an existing customer record.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Request Body**:
+  ```json
+  {
+    "name": "string (optional)",
+    "contact": "string (optional)",
+    "email": "string (optional)",
+    "city": "string (optional)"
+  }
+  ```
+- **Response `200 OK`**: Updated customer object.
+- **Response `400 Bad Request`**: Provided `name` is empty.
+- **Response `404 Not Found`**: Customer ID not found.
+
+---
+
+#### `DELETE /api/customers/:id`
+Deletes a customer record.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Response `204 No Content`**: Successfully deleted.
+- **Response `404 Not Found`**: Customer ID not found.
+
+---
+
+### 4.4 Product Management Service (`/api/products`)
+
+#### `GET /api/products`
+Retrieves all product records sorted by creation date.
+
+- **Access Level**: Authenticated
+- **Response `200 OK`**:
+  ```json
+  {
+    "products": [
+      {
+        "id": "66c1f2e8d101b203c304d701",
+        "sku": "PROD-001",
+        "name": "Precision Hydraulic Pump",
+        "category": "Machinery Parts",
+        "price": 1450.00,
+        "createdAt": "2026-08-17T15:30:00.000Z",
+        "updatedAt": "2026-08-17T15:30:00.000Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+#### `GET /api/products/:id`
+Retrieves a single product by ID.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Response `200 OK`**:
+  ```json
+  {
+    "product": {
+      "id": "66c1f2e8d101b203c304d701",
+      "sku": "PROD-001",
+      "name": "Precision Hydraulic Pump",
+      "category": "Machinery Parts",
+      "price": 1450.00,
+      "createdAt": "2026-08-17T15:30:00.000Z",
+      "updatedAt": "2026-08-17T15:30:00.000Z"
+    }
+  }
+  ```
+- **Response `404 Not Found`**: Product ID not found.
+
+---
+
+#### `POST /api/products`
+Creates a new catalog product.
+
+- **Access Level**: Authenticated
+- **Request Body**:
+  ```json
+  {
+    "sku": "string (required, unique, e.g. 'PROD-002')",
+    "name": "string (required)",
+    "category": "string (optional)",
+    "price": "number >= 0 (required)"
+  }
+  ```
+- **Response `201 Created`**: Returns created `product` object.
+- **Response `400 Bad Request`**: Missing `sku`, missing `name`, or invalid `price` (< 0 or non-numeric).
+- **Response `409 Conflict`**: SKU already in use (case-insensitive check).
+
+---
+
+#### `PUT /api/products/:id`
+Updates product fields.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Request Body**:
+  ```json
+  {
+    "sku": "string (optional)",
+    "name": "string (optional)",
+    "category": "string (optional)",
+    "price": "number >= 0 (optional)"
+  }
+  ```
+- **Response `200 OK`**: Returns updated `product` object.
+- **Response `400 Bad Request`**: Empty `sku`/`name` or invalid `price`.
+- **Response `409 Conflict`**: New SKU is already taken by another product.
+- **Response `404 Not Found`**: Product ID not found.
+
+---
+
+#### `DELETE /api/products/:id`
+Deletes a product from catalog.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Response `204 No Content`**: Successfully deleted.
+- **Response `404 Not Found`**: Product ID not found.
+
+---
+
+### 4.5 Supplier Management Service (`/api/suppliers`)
+
+#### `GET /api/suppliers`
+Lists all suppliers.
+
+- **Access Level**: Authenticated
+- **Response `200 OK`**:
+  ```json
+  {
+    "suppliers": [
+      {
+        "id": "66c1f2e8e101b203c304d801",
+        "name": "Vortex Steels Ltd",
+        "category": "Raw Metals",
+        "contact": "orders@vortexsteels.com",
+        "leadTime": "7 days",
+        "createdAt": "2026-08-17T15:30:00.000Z",
+        "updatedAt": "2026-08-17T15:30:00.000Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+#### `GET /api/suppliers/:id`
+Retrieves a supplier by ID.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Response `200 OK`**: Supplier object.
+- **Response `404 Not Found`**: Supplier ID not found.
+
+---
+
+#### `POST /api/suppliers`
+Creates a new supplier record.
+
+- **Access Level**: Authenticated
+- **Request Body**:
+  ```json
+  {
+    "name": "string (required)",
+    "category": "string (optional)",
+    "contact": "string (optional)",
+    "leadTime": "string (optional)"
+  }
+  ```
+- **Response `201 Created`**: Returns created `supplier` object.
+- **Response `400 Bad Request`**: Missing `name`.
+
+---
+
+#### `PUT /api/suppliers/:id`
+Partially updates a supplier record.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Request Body**: Partial update object (`name`, `category`, `contact`, `leadTime`).
+- **Response `200 OK`**: Returns updated `supplier` object.
+- **Response `400 Bad Request`**: Empty `name`.
+- **Response `404 Not Found`**: Supplier ID not found.
+
+---
+
+#### `DELETE /api/suppliers/:id`
+Deletes a supplier record.
+
+- **Access Level**: Authenticated
+- **Path Parameters**: `id` (string - MongoDB ObjectId)
+- **Response `204 No Content`**: Successfully deleted.
+- **Response `404 Not Found`**: Supplier ID not found.
+
+---
+
+### 4.6 Order Management Service (`/api/orders`)
+
+Unlike Customer/Product/Supplier, order responses are **bare objects/arrays**,
+not wrapped in an `{ orders: [...] }` envelope.
+
+```typescript
+interface OrderLineItem {
+  product: string;             // required
+  qty: number;                 // required, min 1
+  price: number;                // required, min 0
+}
+
+interface OrderRecord {
+  _id: string;                 // MongoDB ObjectId — not remapped to "id"
+  customer: string;            // required
+  lineItems: OrderLineItem[];   // required, at least 1 item
+  status: "Draft" | "Confirmed" | "Invoiced" | "Shipped" | "Closed";
+  date: string;                 // ISO 8601
+  amount: number;               // virtual: sum(qty * price) across lineItems
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### `GET /api/orders`
+Lists every order, newest first. **Access**: Authenticated. **Response `200`**: `OrderRecord[]` (bare array).
+
+#### `GET /api/orders/:id`
+**Access**: Authenticated. **Response `200`**: `OrderRecord`. **`404`**: Order not found.
+
+#### `POST /api/orders`
+**Access**: Authenticated. **Body**: `{ customer, lineItems, status?, date }`. **Response `201`**: `OrderRecord`.
+**`400`**: `lineItems` missing/empty or any item invalid (`product` not a string, `qty < 1`, or `price < 0`).
+
+#### `PUT /api/orders/:id`
+Full-record update (Mongoose schema validation applies). **Response `200`**: `OrderRecord`. **`404`**: not found.
+
+#### `DELETE /api/orders/:id`
+**Response `200`**: `{ "ok": true }` (not `204` — differs from Customer/Product/Supplier). **`404`**: not found.
+
+#### `PATCH /api/orders/:id/status`
+Kanban drag-and-drop status move. **Body**: `{ "status": "Confirmed" }`. **Response `200`**: `OrderRecord`.
+**`400`**: status not one of `ORDER_STATUSES`. **`404`**: not found.
+
+---
+
+### 4.7 Incoming Order Draft Service (`/api/order-drafts`)
+
+Bare objects/arrays, same as Orders. Represents an email-parsed draft awaiting
+human review before it becomes a real Order.
+
+#### `GET /api/order-drafts` / `GET /api/order-drafts/:id`
+**Access**: Authenticated. **Response `200`**: draft object/array (bare, includes `lineItems[]`).
+
+#### `POST /api/order-drafts` / `PUT /api/order-drafts/:id`
+**Access**: Authenticated. **Response**: `201`/`200` with the draft object.
+
+#### `DELETE /api/order-drafts/:id`
+**Response `200`**: `{ "ok": true }`.
+
+#### `POST /api/order-drafts/:id/approve`
+Factory-method endpoint: converts every one of the draft's line items into
+a real `Order`'s line items (`status: "Confirmed"`), deletes the draft, and
+returns the new order.
+
+- **Response `201 Created`**: `OrderRecord` (bare, see 4.6).
+- **Response `400 Bad Request`**: draft has no line items.
+- **Response `404 Not Found`**: draft not found.
+
+---
+
+### 4.8 Invoice Management Service (`/api/invoices`)
+
+Wrapped responses (`{ invoice }` / `{ invoices }`), unlike Order. `orderId`
+is populated on the **list** route only — `order` is present in that response
+and omitted on get/create/update.
+
+```typescript
+interface Invoice {
+  id: string;
+  orderId: string;
+  order?: OrderRecord;    // only present when populated (list route)
+  status: "Draft" | "Sent" | "Paid" | "Overdue";
+  issueDate: string;
+  dueDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+- `GET /api/invoices` — list, **populates** `orderId` → `order`. Response: `{ invoices: Invoice[] }`.
+- `GET /api/invoices/:id` — Response: `{ invoice: Invoice }`. `404` if missing.
+- `POST /api/invoices` — Body: `{ orderId, status?, issueDate?, dueDate? }`. `400` on missing/invalid `orderId` or bad `status`.
+- `PUT /api/invoices/:id` — partial update (`$set`). Same validation as create.
+- `PATCH /api/invoices/:id/mark-paid` — no body; sets `status: "Paid"`.
+
+No `DELETE` route — invoices move through their status lifecycle instead of being removed.
+
+---
+
+### 4.9 Shipment Management Service (`/api/shipments`)
+
+Same shape/pattern as Invoices.
+
+```typescript
+interface Shipment {
+  id: string;
+  orderId: string;
+  order?: OrderRecord;      // only present when populated (list route)
+  invoiceId: string | null;
+  status: "Draft" | "Packed" | "Dispatched" | "Delivered";
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+- `GET /api/shipments` — list, populates `orderId` → `order`. Response: `{ shipments: Shipment[] }`.
+- `GET /api/shipments/:id` — Response: `{ shipment: Shipment }`. `404` if missing.
+- `POST /api/shipments` — Body: `{ orderId, invoiceId?, status?, date? }`. `400` on invalid `orderId`/`invoiceId`/`status`.
+- `PUT /api/shipments/:id` — partial update (`$set`).
+- `PATCH /api/shipments/:id/dispatch` — no body; sets `status: "Dispatched"`.
+- `PATCH /api/shipments/:id/deliver` — no body; sets `status: "Delivered"`.
+
+No `DELETE` route — same lifecycle rationale as Invoices.
+
+---
+
+### 4.10 Inventory Service (`/api/inventory`)
+
+Wrapped responses, but note the **inconsistent key name** between list and
+single-item routes (`inventory` vs `inventoryItem`) — a quirk of the current
+implementation, not a typo in this doc.
+
+```typescript
+interface InventoryItem {
+  id: string;
+  sku: string;
+  name: string;
+  category?: string;
+  qty: number;
+  reorderPoint: number;
+}
+```
+
+- `GET /api/inventory` — Response: `{ inventory: InventoryItem[] }`.
+- `GET /api/inventory/:id` — Response: `{ inventoryItem: InventoryItem }`. `404` if missing.
+- `POST /api/inventory` — Body: `{ sku, name, category?, qty, reorderPoint }`. Response `201`: `{ inventoryItem }`.
+- `PUT /api/inventory/:id` — full-field update. Response: `{ inventoryItem }`.
+- `DELETE /api/inventory/:id` — Response `200`: `{ "message": "Inventory item deleted successfully" }` (not `204`).
+
+All routes require authentication.
+
+---
+
+### 4.11 Production Job Service (`/api/production-jobs`)
+
+Wrapped under the `productionJob`/`productionJobs` key.
+
+```typescript
+interface ProductionJob {
+  id: string;
+  product: string;
+  qty: number;
+  due: string;
+  status: "Planned" | "In Progress" | "Completed";
+  progress: number;
+}
+```
+
+- `GET /api/production-jobs` — Response: `{ productionJobs: ProductionJob[] }`.
+- `GET /api/production-jobs/:id` — Response: `{ productionJob: ProductionJob }`. `404` if missing.
+- `POST /api/production-jobs` — Body: `{ product, qty, due, status?, progress? }`. Response `201`: `{ productionJob }`.
+- `PUT /api/production-jobs/:id` — full-field update. Response: `{ productionJob }`.
+- `PATCH /api/production-jobs/:id/status` — Body: `{ status?, progress? }` (partial `$set`). Response: `{ productionJob }`.
+
+No `DELETE` route. All routes require authentication.
