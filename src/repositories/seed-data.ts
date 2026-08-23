@@ -58,12 +58,12 @@ export const INVENTORY_SEED: InventoryItemProps[] = [
 ];
 
 export const SHIPMENT_SEED: ShipmentProps[] = [
-  { id: "SHP-501", number: "SHP-501", orderId: "ORD-1036", invoiceId: "INV-2039", status: "Delivered", date: "Jul 22" },
-  { id: "SHP-502", number: "SHP-502", orderId: "ORD-1038", invoiceId: "INV-2041", status: "Delivered", date: "Jul 29" },
-  { id: "SHP-503", number: "SHP-503", orderId: "ORD-1039", invoiceId: "INV-2042", status: "Dispatched", date: "Aug 5" },
-  { id: "SHP-504", number: "SHP-504", orderId: "ORD-1040", invoiceId: "INV-2043", status: "Packed", date: "Aug 6" },
-  { id: "SHP-505", number: "SHP-505", orderId: "ORD-1041", invoiceId: "INV-2044", status: "Draft", date: "—" },
-  { id: "SHP-506", number: "SHP-506", orderId: "ORD-1042", invoiceId: null, status: "Draft", date: "—" },
+  { id: "SHP-501", number: "SHP-501", orderId: "ORD-1036", invoiceId: "INV-2039", invoiceNumber: "INV-2039", status: "Delivered", date: "Jul 22" },
+  { id: "SHP-502", number: "SHP-502", orderId: "ORD-1038", invoiceId: "INV-2041", invoiceNumber: "INV-2041", status: "Delivered", date: "Jul 29" },
+  { id: "SHP-503", number: "SHP-503", orderId: "ORD-1039", invoiceId: "INV-2042", invoiceNumber: "INV-2042", status: "Dispatched", date: "Aug 5" },
+  { id: "SHP-504", number: "SHP-504", orderId: "ORD-1040", invoiceId: "INV-2043", invoiceNumber: "INV-2043", status: "Packed", date: "Aug 6" },
+  { id: "SHP-505", number: "SHP-505", orderId: "ORD-1041", invoiceId: "INV-2044", invoiceNumber: "INV-2044", status: "Draft", date: "—" },
+  { id: "SHP-506", number: "SHP-506", orderId: "ORD-1042", invoiceId: null, invoiceNumber: null, status: "Draft", date: "—" },
 ];
 
 export const JOB_SEED: ProductionJobProps[] = [

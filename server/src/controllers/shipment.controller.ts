@@ -13,7 +13,7 @@ function isValidObjectIdOrNull(value: unknown): value is string | null {
 
 /** GET /api/shipments — populates orderId so the response includes order details, not just its id. */
 export async function listShipments(_req: Request, res: Response): Promise<void> {
-  const shipments = await Shipment.find().sort({ createdAt: 1 }).populate("orderId");
+  const shipments = await Shipment.find().sort({ createdAt: 1 }).populate("orderId").populate("invoiceId", "number");
   res.json({ shipments: shipments.map(toPublicShipment) });
 }
 

@@ -8,6 +8,8 @@ export interface ShipmentProps {
   number: string;
   orderId: string;
   invoiceId: string | null;
+  /** The linked invoice's human-readable number, when known (populated by the API) — falls back to invoiceId in invoiceLabel when it isn't. */
+  invoiceNumber: string | null;
   status: ShipmentStatus;
   date: string;
 }
@@ -20,6 +22,7 @@ export class Shipment extends StatusfulEntity {
   readonly number: string;
   readonly orderId: string;
   readonly invoiceId: string | null;
+  readonly invoiceNumber: string | null;
   private _date: string;
   private _status: ShipmentStatus;
 
@@ -28,6 +31,7 @@ export class Shipment extends StatusfulEntity {
     this.number = props.number;
     this.orderId = props.orderId;
     this.invoiceId = props.invoiceId;
+    this.invoiceNumber = props.invoiceNumber;
     this._date = props.date;
     this._status = props.status;
   }
@@ -46,7 +50,7 @@ export class Shipment extends StatusfulEntity {
   }
 
   get invoiceLabel(): string {
-    return this.invoiceId ?? "—";
+    return this.invoiceNumber ?? this.invoiceId ?? "—";
   }
 
   dispatch(): void {
