@@ -1,6 +1,5 @@
 "use client";
 
-import { useERPStore } from "@/store/useERPStore";
 import { Card, CardKicker, CardTitle } from "@/components/ui/Card";
 import { Table, type Column } from "@/components/ui/Table";
 import { StatusTag } from "@/components/ui/Tag";
@@ -54,12 +53,11 @@ const orderColumns: Column<Order>[] = [
 /* ------------------------------------------------------------------ */
 interface CustomerDetailProps {
   customer: Customer;
+  /** Pre-filtered to this customer's orders by the page — fetched from the real API, not ERPStore. */
+  orders: Order[];
 }
 
-export function CustomerDetail({ customer }: CustomerDetailProps) {
-  const store = useERPStore();
-  const orders = store.ordersByCustomer(customer.name);
-
+export function CustomerDetail({ customer, orders }: CustomerDetailProps) {
   // Calculate total revenue from all orders for this customer
   const totalRevenue = orders.reduce(
     (sum, o) => sum.add(o.amount),

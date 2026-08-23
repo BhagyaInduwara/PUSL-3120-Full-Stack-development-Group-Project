@@ -1,28 +1,92 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useERPStore } from "@/store/useERPStore";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/icons";
-import type { Order } from "@/domain/Order";
+import { Order, type OrderStatus } from "@/domain/Order";
+import { IncomingOrderDraft, type DraftLineItem } from "@/domain/IncomingOrderDraft";
 import { OrderBoard } from "@/components/sales/OrderBoard";
 import { OrderTable } from "@/components/sales/OrderTable";
 import { NewOrderDrawer } from "@/components/sales/NewOrderDrawer";
 import { OrderDetailDialog } from "@/components/sales/OrderDetailDialog";
 
+const API_URL = "http://localhost:4000";
 type View = "board" | "table";
 
+interface ApiOrder {
+  _id: string;
+  customer: string;
+  product: string;
+  qty: number;
+  price: number;
+  status: OrderStatus;
+  date: string;
+}
+
+interface ApiDraft {
+  _id: string;
+  customer: string;
+  emailSubject: string;
+  lineItems: DraftLineItem[];
+}
+
+function toOrder(o: ApiOrder): Order {
+  return new Order({
+    id: o._id,
+    customer: o.customer,
+    product: o.product,
+    qty: o.qty,
+    price: o.price,
+    status: o.status,
+    date: new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+  });
+}
+
+function toDraft(d: ApiDraft): IncomingOrderDraft {
+  return new IncomingOrderDraft({
+    id: d._id,
+    customer: d.customer,
+    emailSubject: d.emailSubject,
+    lineItems: d.lineItems,
+  });
+}
+
+/** Pure fetches, no setState — see production/page.tsx for why (react-hooks/set-state-in-effect). */
+async function fetchOrders(): Promise<Order[]> {
+  const res = await fetch(`${API_URL}/api/orders`, { credentials: "include" });
+  if (!res.ok) return [];
+  return (await res.json() as ApiOrder[]).map(toOrder);
+}
+
+async function fetchFirstDraft(): Promise<IncomingOrderDraft | null> {
+  const res = await fetch(`${API_URL}/api/order-drafts`, { credentials: "include" });
+  if (!res.ok) return null;
+  const drafts = (await res.json()) as ApiDraft[];
+  return drafts.length > 0 ? toDraft(drafts[0]) : null;
+}
+
 export default function SalesPage() {
-  const store = useERPStore();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [draft, setDraft] = useState<IncomingOrderDraft | null>(null);
   const [view, setView] = useState<View>("board");
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
-  const orders = store.orders;
+  useEffect(() => {
+    (async () => {
+      try {
+        setOrders(await fetchOrders());
+        setDraft(await fetchFirstDraft());
+      } catch (error) {
+        console.error("Error fetching orders:", error);
+      }
+    })();
+  }, []);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return orders;
@@ -33,6 +97,78 @@ export default function SalesPage() {
         o.product.toLowerCase().includes(q)
     );
   }, [orders, search]);
+
+  async function handleMove(orderId: string, status: OrderStatus) {
+    try {
+      await fetch(`${API_URL}/api/orders/${orderId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      setOrders(await fetchOrders());
+    } catch (error) {
+      console.error("Error updating order status:", error);
+    }
+  }
+
+  async function handleSaveOrder(
+    patch: Partial<{ customer: string; product: string; qty: number; price: number; date: string }>
+  ) {
+    if (!selectedOrder) return;
+    try {
+      await fetch(`${API_URL}/api/orders/${selectedOrder.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        // The update endpoint replaces the whole record, so unchanged fields
+        // are sent as-is (status included) rather than left undefined.
+        body: JSON.stringify({
+          customer: patch.customer ?? selectedOrder.customer,
+          product: patch.product ?? selectedOrder.product,
+          qty: patch.qty ?? selectedOrder.qty,
+          price: patch.price ?? selectedOrder.price.dollars,
+          status: selectedOrder.status,
+          date: patch.date ?? selectedOrder.date,
+        }),
+      });
+      setSelectedOrder(null);
+      setOrders(await fetchOrders());
+    } catch (error) {
+      console.error("Error saving order:", error);
+    }
+  }
+
+  function handleDraftLineItemChange(index: number, patch: Partial<DraftLineItem>) {
+    setDraft((prev) => (prev ? prev.withLineItem(index, patch) : prev));
+  }
+
+  async function handleApproveDraft() {
+    if (!draft) return;
+    try {
+      // Persist any local edits first — the approve endpoint reads lineItems
+      // fresh from the database, not whatever's currently on screen.
+      await fetch(`${API_URL}/api/order-drafts/${draft.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          customer: draft.customer,
+          emailSubject: draft.emailSubject,
+          lineItems: draft.lineItems,
+        }),
+      });
+      await fetch(`${API_URL}/api/order-drafts/${draft.id}/approve`, {
+        method: "POST",
+        credentials: "include",
+      });
+      setDrawerOpen(false);
+      setOrders(await fetchOrders());
+      setDraft(await fetchFirstDraft());
+    } catch (error) {
+      console.error("Error approving draft:", error);
+    }
+  }
 
   return (
     <>
@@ -56,7 +192,7 @@ export default function SalesPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Button variant="primary" onClick={() => setDrawerOpen(true)} disabled={!store.incomingDraft}>
+            <Button variant="primary" onClick={() => setDrawerOpen(true)} disabled={!draft}>
               New Order
               <PlusIcon />
             </Button>
@@ -68,32 +204,21 @@ export default function SalesPage() {
           {view === "table" ? (
             <OrderTable orders={filtered} onSelect={setSelectedOrder} />
           ) : (
-            <OrderBoard
-              orders={filtered}
-              onMove={(id, status) => store.moveOrderStatus(id, status)}
-              onSelect={setSelectedOrder}
-            />
+            <OrderBoard orders={filtered} onMove={handleMove} onSelect={setSelectedOrder} />
           )}
         </div>
 
-        {drawerOpen && store.incomingDraft && (
+        {drawerOpen && draft && (
           <NewOrderDrawer
-            draft={store.incomingDraft}
+            draft={draft}
             onClose={() => setDrawerOpen(false)}
-            onLineItemChange={(i, patch) => store.updateDraftLineItem(i, patch)}
-            onApprove={() => {
-              store.approveIncomingDraft();
-              setDrawerOpen(false);
-            }}
+            onLineItemChange={handleDraftLineItemChange}
+            onApprove={handleApproveDraft}
           />
         )}
 
         {selectedOrder && (
-          <OrderDetailDialog
-            order={selectedOrder}
-            onClose={() => setSelectedOrder(null)}
-            onSave={(patch) => store.updateOrder(selectedOrder.id, patch)}
-          />
+          <OrderDetailDialog order={selectedOrder} onClose={() => setSelectedOrder(null)} onSave={handleSaveOrder} />
         )}
       </div>
     </>

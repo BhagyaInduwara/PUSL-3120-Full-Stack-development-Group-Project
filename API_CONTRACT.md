@@ -16,7 +16,7 @@ This document serves as the formal API contract for the **FlowERP** backend serv
 
 ### Authentication & Session Model
 Authentication is cookie-based via signed tokens stored in `httpOnly` HTTP cookies:
-- **Cookie Name**: `flow_session`
+- **Cookie Name**: `flowerp_token`
 - **Security Attributes**:
   - `httpOnly: true` (Inaccessible to client-side JavaScript, mitigating XSS risks)
   - `sameSite: "lax"` (Development) / `"none"` (Cross-domain HTTPS production)
@@ -137,7 +137,7 @@ Self-service user registration. Automatically assigns the `"staff"` role.
     }
   }
   ```
-  *(Sets `flow_session` HTTP cookie)*
+  *(Sets `flowerp_token` HTTP cookie)*
 - **Response `400 Bad Request`**: Username < 3 chars or Password < 6 chars.
 - **Response `409 Conflict`**: Username already taken.
 
@@ -165,7 +165,7 @@ Authenticates user credentials and establishes a session. Constant-time password
     }
   }
   ```
-  *(Sets `flow_session` HTTP cookie)*
+  *(Sets `flowerp_token` HTTP cookie)*
 - **Response `400 Bad Request`**: Missing username or password.
 - **Response `401 Unauthorized`**: Invalid username or password.
 
@@ -182,7 +182,7 @@ Terminates the active user session.
     "ok": true
   }
   ```
-  *(Clears `flow_session` HTTP cookie)*
+  *(Clears `flowerp_token` HTTP cookie)*
 
 ---
 
@@ -190,7 +190,7 @@ Terminates the active user session.
 Fetches current authenticated user context from session cookie.
 
 - **Access Level**: Authenticated (`requireAuth`)
-- **Request Headers / Cookies**: Cookie `flow_session`
+- **Request Headers / Cookies**: Cookie `flowerp_token`
 - **Response `200 OK`**:
   ```json
   {
@@ -544,3 +544,177 @@ Deletes a supplier record.
 - **Path Parameters**: `id` (string - MongoDB ObjectId)
 - **Response `204 No Content`**: Successfully deleted.
 - **Response `404 Not Found`**: Supplier ID not found.
+
+---
+
+### 4.6 Order Management Service (`/api/orders`)
+
+Unlike Customer/Product/Supplier, order responses are **bare objects/arrays**,
+not wrapped in an `{ orders: [...] }` envelope.
+
+```typescript
+interface OrderRecord {
+  _id: string;                 // MongoDB ObjectId — not remapped to "id"
+  customer: string;            // required
+  product: string;             // required
+  qty: number;                 // required, min 1
+  price: number;                // required, min 0
+  status: "Draft" | "Confirmed" | "Invoiced" | "Shipped" | "Closed";
+  date: string;                 // ISO 8601
+  amount: number;               // virtual: qty * price
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### `GET /api/orders`
+Lists every order, newest first. **Access**: Authenticated. **Response `200`**: `OrderRecord[]` (bare array).
+
+#### `GET /api/orders/:id`
+**Access**: Authenticated. **Response `200`**: `OrderRecord`. **`404`**: Order not found.
+
+#### `POST /api/orders`
+**Access**: Authenticated. **Body**: `{ customer, product, qty, price, status?, date }`. **Response `201`**: `OrderRecord`.
+
+#### `PUT /api/orders/:id`
+Full-record update (Mongoose schema validation applies). **Response `200`**: `OrderRecord`. **`404`**: not found.
+
+#### `DELETE /api/orders/:id`
+**Response `200`**: `{ "ok": true }` (not `204` — differs from Customer/Product/Supplier). **`404`**: not found.
+
+#### `PATCH /api/orders/:id/status`
+Kanban drag-and-drop status move. **Body**: `{ "status": "Confirmed" }`. **Response `200`**: `OrderRecord`.
+**`400`**: status not one of `ORDER_STATUSES`. **`404`**: not found.
+
+---
+
+### 4.7 Incoming Order Draft Service (`/api/order-drafts`)
+
+Bare objects/arrays, same as Orders. Represents an email-parsed draft awaiting
+human review before it becomes a real Order.
+
+#### `GET /api/order-drafts` / `GET /api/order-drafts/:id`
+**Access**: Authenticated. **Response `200`**: draft object/array (bare, includes `lineItems[]`).
+
+#### `POST /api/order-drafts` / `PUT /api/order-drafts/:id`
+**Access**: Authenticated. **Response**: `201`/`200` with the draft object.
+
+#### `DELETE /api/order-drafts/:id`
+**Response `200`**: `{ "ok": true }`.
+
+#### `POST /api/order-drafts/:id/approve`
+Factory-method endpoint: converts the draft's first line item into a real
+`Order` (`status: "Confirmed"`), deletes the draft, and returns the new order.
+
+- **Response `201 Created`**: `OrderRecord` (bare, see 4.6).
+- **Response `400 Bad Request`**: draft has no line items.
+- **Response `404 Not Found`**: draft not found.
+
+---
+
+### 4.8 Invoice Management Service (`/api/invoices`)
+
+Wrapped responses (`{ invoice }` / `{ invoices }`), unlike Order. `orderId`
+is populated on the **list** route only — `order` is present in that response
+and omitted on get/create/update.
+
+```typescript
+interface Invoice {
+  id: string;
+  orderId: string;
+  order?: OrderRecord;    // only present when populated (list route)
+  status: "Draft" | "Sent" | "Paid" | "Overdue";
+  issueDate: string;
+  dueDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+- `GET /api/invoices` — list, **populates** `orderId` → `order`. Response: `{ invoices: Invoice[] }`.
+- `GET /api/invoices/:id` — Response: `{ invoice: Invoice }`. `404` if missing.
+- `POST /api/invoices` — Body: `{ orderId, status?, issueDate?, dueDate? }`. `400` on missing/invalid `orderId` or bad `status`.
+- `PUT /api/invoices/:id` — partial update (`$set`). Same validation as create.
+- `PATCH /api/invoices/:id/mark-paid` — no body; sets `status: "Paid"`.
+
+No `DELETE` route — invoices move through their status lifecycle instead of being removed.
+
+---
+
+### 4.9 Shipment Management Service (`/api/shipments`)
+
+Same shape/pattern as Invoices.
+
+```typescript
+interface Shipment {
+  id: string;
+  orderId: string;
+  order?: OrderRecord;      // only present when populated (list route)
+  invoiceId: string | null;
+  status: "Draft" | "Packed" | "Dispatched" | "Delivered";
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+- `GET /api/shipments` — list, populates `orderId` → `order`. Response: `{ shipments: Shipment[] }`.
+- `GET /api/shipments/:id` — Response: `{ shipment: Shipment }`. `404` if missing.
+- `POST /api/shipments` — Body: `{ orderId, invoiceId?, status?, date? }`. `400` on invalid `orderId`/`invoiceId`/`status`.
+- `PUT /api/shipments/:id` — partial update (`$set`).
+- `PATCH /api/shipments/:id/dispatch` — no body; sets `status: "Dispatched"`.
+- `PATCH /api/shipments/:id/deliver` — no body; sets `status: "Delivered"`.
+
+No `DELETE` route — same lifecycle rationale as Invoices.
+
+---
+
+### 4.10 Inventory Service (`/api/inventory`)
+
+Wrapped responses, but note the **inconsistent key name** between list and
+single-item routes (`inventory` vs `inventoryItem`) — a quirk of the current
+implementation, not a typo in this doc.
+
+```typescript
+interface InventoryItem {
+  id: string;
+  sku: string;
+  name: string;
+  category?: string;
+  qty: number;
+  reorderPoint: number;
+}
+```
+
+- `GET /api/inventory` — Response: `{ inventory: InventoryItem[] }`.
+- `GET /api/inventory/:id` — Response: `{ inventoryItem: InventoryItem }`. `404` if missing.
+- `POST /api/inventory` — Body: `{ sku, name, category?, qty, reorderPoint }`. Response `201`: `{ inventoryItem }`.
+- `PUT /api/inventory/:id` — full-field update. Response: `{ inventoryItem }`.
+- `DELETE /api/inventory/:id` — Response `200`: `{ "message": "Inventory item deleted successfully" }` (not `204`).
+
+All routes require authentication.
+
+---
+
+### 4.11 Production Job Service (`/api/production-jobs`)
+
+Wrapped under the `productionJob`/`productionJobs` key.
+
+```typescript
+interface ProductionJob {
+  id: string;
+  product: string;
+  qty: number;
+  due: string;
+  status: "Planned" | "In Progress" | "Completed";
+  progress: number;
+}
+```
+
+- `GET /api/production-jobs` — Response: `{ productionJobs: ProductionJob[] }`.
+- `GET /api/production-jobs/:id` — Response: `{ productionJob: ProductionJob }`. `404` if missing.
+- `POST /api/production-jobs` — Body: `{ product, qty, due, status?, progress? }`. Response `201`: `{ productionJob }`.
+- `PUT /api/production-jobs/:id` — full-field update. Response: `{ productionJob }`.
+- `PATCH /api/production-jobs/:id/status` — Body: `{ status?, progress? }` (partial `$set`). Response: `{ productionJob }`.
+
+No `DELETE` route. All routes require authentication.
