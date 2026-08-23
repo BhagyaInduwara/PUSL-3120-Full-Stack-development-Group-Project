@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Table, type Column } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { AddCustomerDialog } from "@/components/settings/AddCustomerDialog";
+import { CustomerDetailDialog, type CustomerEditableFields } from "@/components/settings/CustomerDetailDialog";
 import { Customer } from "@/domain/Customer";
 
 const API_URL = "http://localhost:4000";
@@ -37,8 +37,8 @@ const columns: Column<Customer>[] = [
 
 export default function CustomersSettingsPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +65,22 @@ export default function CustomersSettingsPage() {
     }
   }
 
+  async function handleSaveCustomer(patch: CustomerEditableFields) {
+    if (!selectedCustomer) return;
+    try {
+      await fetch(`${API_URL}/api/customers/${selectedCustomer.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(patch),
+      });
+      setSelectedCustomer(null);
+      setCustomers(await fetchCustomers());
+    } catch (error) {
+      console.error("Error saving customer:", error);
+    }
+  }
+
   return (
     <>
       <div className="flex justify-end mb-3">
@@ -72,14 +88,17 @@ export default function CustomersSettingsPage() {
           Add customer
         </Button>
       </div>
-      <Table
-        columns={columns}
-        rows={customers}
-        rowKey={(c) => c.id}
-        onRowClick={(c) => router.push(`/settings/customers/${c.id}`)}
-      />
+      <Table columns={columns} rows={customers} rowKey={(c) => c.id} onRowClick={setSelectedCustomer} />
 
       {dialogOpen && <AddCustomerDialog onClose={() => setDialogOpen(false)} onSubmit={handleAddCustomer} />}
+
+      {selectedCustomer && (
+        <CustomerDetailDialog
+          customer={selectedCustomer}
+          onClose={() => setSelectedCustomer(null)}
+          onSave={handleSaveCustomer}
+        />
+      )}
     </>
   );
 }
