@@ -4,6 +4,8 @@ export type JobStatus = "Planned" | "In Progress" | "Completed";
 
 export interface ProductionJobProps {
   id: string;
+  /** Human-readable display id, e.g. "2026/08/23/A001" — distinct from `id` (the Mongo ObjectId used for routing/API calls). */
+  number: string;
   product: string;
   qty: number;
   due: string;
@@ -19,6 +21,7 @@ export interface ProductionJobEditableFields {
 }
 
 export class ProductionJob extends Entity {
+  readonly number: string;
   private _product: string;
   private _qty: number;
   private _due: string;
@@ -27,6 +30,7 @@ export class ProductionJob extends Entity {
 
   constructor(props: ProductionJobProps) {
     super(props.id);
+    this.number = props.number;
     this._product = props.product;
     this._qty = props.qty;
     this._due = props.due;

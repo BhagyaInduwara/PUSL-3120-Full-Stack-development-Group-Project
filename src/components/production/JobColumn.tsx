@@ -35,7 +35,7 @@ export function JobColumn({ label, jobs, variant, dim, onSelect }: JobColumnProp
                 <div className="h-full bg-[var(--color-accent)]" style={{ width: `${job.progress}%` }} />
               </div>
             )}
-            <div className="text-[11px] text-[var(--color-neutral-500)]">{job.id}</div>
+            <div className="text-[11px] text-[var(--color-neutral-500)]">{job.number}</div>
           </Card>
         ))}
       </div>

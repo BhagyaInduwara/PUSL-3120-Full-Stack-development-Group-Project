@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface IProductionJob extends Document {
+  number: string;
   product: string;
   qty: number;
   due: Date;
@@ -10,6 +11,10 @@ export interface IProductionJob extends Document {
 
 const productionJobSchema = new Schema<IProductionJob>(
   {
+    // Human-readable display id, e.g. "2026/08/23/A001" — see
+    // ../utils/recordNumber.ts. Assigned once at creation, immutable after.
+    number: { type: String, required: true, unique: true },
+
     product: { type: String, required: true },
     qty: { type: Number, required: true, min: 1 },
     due: { type: Date, required: true },

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Table, type Column } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { AddProductDialog, type AddProductData } from "@/components/settings/AddProductDialog";
+import { ProductDetailDialog, type ProductEditableFields } from "@/components/settings/ProductDetailDialog";
 import { Product } from "@/domain/Product";
 
 const API_URL = "http://localhost:4000";
@@ -20,11 +21,20 @@ function toProduct(p: ApiProduct): Product {
   return new Product({ sku: p.sku, name: p.name, category: p.category, price: p.price });
 }
 
-async function fetchProducts(): Promise<Product[]> {
+interface FetchedProducts {
+  products: Product[];
+  mongoIdBySku: Record<string, string>;
+}
+
+async function fetchProducts(): Promise<FetchedProducts> {
   const res = await fetch(`${API_URL}/api/products`, { credentials: "include" });
-  if (!res.ok) return [];
+  if (!res.ok) return { products: [], mongoIdBySku: {} };
   const data = await res.json();
-  return (data.products as ApiProduct[]).map(toProduct);
+  const apiProducts = data.products as ApiProduct[];
+  return {
+    products: apiProducts.map(toProduct),
+    mongoIdBySku: Object.fromEntries(apiProducts.map((p) => [p.sku, p.id])),
+  };
 }
 
 const columns: Column<Product>[] = [
@@ -36,13 +46,20 @@ const columns: Column<Product>[] = [
 
 export default function ProductsSettingsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  // Product uses its sku as domain id, but PUT requests need the real Mongo
+  // _id — kept separately rather than smuggled into the domain class, which
+  // has no field for it (same pattern as inventory/page.tsx).
+  const [mongoIdBySku, setMongoIdBySku] = useState<Record<string, string>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        setProducts(await fetchProducts());
+        const fetched = await fetchProducts();
+        setProducts(fetched.products);
+        setMongoIdBySku(fetched.mongoIdBySku);
       } catch (err) {
         console.error("Error fetching products:", err);
       }
@@ -64,10 +81,32 @@ export default function ProductsSettingsPage() {
         return;
       }
       setDialogOpen(false);
-      setProducts(await fetchProducts());
+      const fetched = await fetchProducts();
+      setProducts(fetched.products);
+      setMongoIdBySku(fetched.mongoIdBySku);
     } catch (err) {
       console.error("Error adding product:", err);
       setError("Couldn't reach the server. Please try again.");
+    }
+  }
+
+  async function handleSaveProduct(patch: ProductEditableFields) {
+    if (!selectedProduct) return;
+    const mongoId = mongoIdBySku[selectedProduct.sku];
+    if (!mongoId) return;
+    try {
+      await fetch(`${API_URL}/api/products/${mongoId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(patch),
+      });
+      setSelectedProduct(null);
+      const fetched = await fetchProducts();
+      setProducts(fetched.products);
+      setMongoIdBySku(fetched.mongoIdBySku);
+    } catch (error) {
+      console.error("Error saving product:", error);
     }
   }
 
@@ -78,7 +117,7 @@ export default function ProductsSettingsPage() {
           Add product
         </Button>
       </div>
-      <Table columns={columns} rows={products} rowKey={(p) => p.sku} />
+      <Table columns={columns} rows={products} rowKey={(p) => p.sku} onRowClick={setSelectedProduct} />
 
       {dialogOpen && (
         <AddProductDialog
@@ -88,6 +127,14 @@ export default function ProductsSettingsPage() {
             setError(null);
           }}
           onSubmit={handleAddProduct}
+        />
+      )}
+
+      {selectedProduct && (
+        <ProductDetailDialog
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onSave={handleSaveProduct}
         />
       )}
     </>

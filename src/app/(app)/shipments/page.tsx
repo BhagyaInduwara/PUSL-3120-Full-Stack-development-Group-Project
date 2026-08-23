@@ -31,6 +31,7 @@ interface ApiShipment {
   orderId: string;
   order?: ApiOrderEmbed;
   invoiceId: string | null;
+  invoice?: { id: string; number: string };
   status: ShipmentStatus;
   date: string;
 }
@@ -52,6 +53,7 @@ function toShipment(s: ApiShipment): Shipment {
     number: s.number,
     orderId: s.orderId,
     invoiceId: s.invoiceId,
+    invoiceNumber: s.invoice?.number ?? null,
     status: s.status,
     date: fmtDate(s.date),
   });

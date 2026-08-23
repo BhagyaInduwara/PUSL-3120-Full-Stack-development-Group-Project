@@ -182,7 +182,13 @@ async function main() {
   }
   console.log(`[seed] created ${SHIPMENT_SEED.length} shipments.`);
 
-  await ProductionJob.insertMany(JOB_SEED.map((j) => ({ ...j, due: parseDate(j.due) })));
+  for (const j of JOB_SEED) {
+    await ProductionJob.create({
+      number: await generateRecordNumber("job", new Date()),
+      ...j,
+      due: parseDate(j.due),
+    });
+  }
   console.log(`[seed] created ${JOB_SEED.length} production jobs.`);
 
   await mongoose.disconnect();

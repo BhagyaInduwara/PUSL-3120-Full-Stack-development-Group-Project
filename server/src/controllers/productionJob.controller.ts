@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import ProductionJob from "../models/ProductionJob.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
 
 // Get all production jobs
 export const getProductionJobs = asyncHandler(async (req: Request, res: Response) => {
@@ -23,15 +24,17 @@ export const getProductionJobById = asyncHandler(async (req: Request, res: Respo
 // Create a new production job
 export const createProductionJob = asyncHandler(async (req: Request, res: Response) => {
   const { product, qty, due, status, progress } = req.body;
-  
-  const newJob = await ProductionJob.create({ 
-    product, 
-    qty, 
-    due, 
-    status, 
-    progress 
+
+  const number = await generateRecordNumber("job", new Date());
+  const newJob = await ProductionJob.create({
+    number,
+    product,
+    qty,
+    due,
+    status,
+    progress
   });
-  
+
   res.status(201).json({ productionJob: newJob });
 });
 

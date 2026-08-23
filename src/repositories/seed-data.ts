@@ -58,22 +58,22 @@ export const INVENTORY_SEED: InventoryItemProps[] = [
 ];
 
 export const SHIPMENT_SEED: ShipmentProps[] = [
-  { id: "SHP-501", number: "SHP-501", orderId: "ORD-1036", invoiceId: "INV-2039", status: "Delivered", date: "Jul 22" },
-  { id: "SHP-502", number: "SHP-502", orderId: "ORD-1038", invoiceId: "INV-2041", status: "Delivered", date: "Jul 29" },
-  { id: "SHP-503", number: "SHP-503", orderId: "ORD-1039", invoiceId: "INV-2042", status: "Dispatched", date: "Aug 5" },
-  { id: "SHP-504", number: "SHP-504", orderId: "ORD-1040", invoiceId: "INV-2043", status: "Packed", date: "Aug 6" },
-  { id: "SHP-505", number: "SHP-505", orderId: "ORD-1041", invoiceId: "INV-2044", status: "Draft", date: "—" },
-  { id: "SHP-506", number: "SHP-506", orderId: "ORD-1042", invoiceId: null, status: "Draft", date: "—" },
+  { id: "SHP-501", number: "SHP-501", orderId: "ORD-1036", invoiceId: "INV-2039", invoiceNumber: "INV-2039", status: "Delivered", date: "Jul 22" },
+  { id: "SHP-502", number: "SHP-502", orderId: "ORD-1038", invoiceId: "INV-2041", invoiceNumber: "INV-2041", status: "Delivered", date: "Jul 29" },
+  { id: "SHP-503", number: "SHP-503", orderId: "ORD-1039", invoiceId: "INV-2042", invoiceNumber: "INV-2042", status: "Dispatched", date: "Aug 5" },
+  { id: "SHP-504", number: "SHP-504", orderId: "ORD-1040", invoiceId: "INV-2043", invoiceNumber: "INV-2043", status: "Packed", date: "Aug 6" },
+  { id: "SHP-505", number: "SHP-505", orderId: "ORD-1041", invoiceId: "INV-2044", invoiceNumber: "INV-2044", status: "Draft", date: "—" },
+  { id: "SHP-506", number: "SHP-506", orderId: "ORD-1042", invoiceId: null, invoiceNumber: null, status: "Draft", date: "—" },
 ];
 
 export const JOB_SEED: ProductionJobProps[] = [
-  { id: "JOB-301", product: "Executive Desk – Walnut", qty: 17, due: "Aug 8", status: "In Progress", progress: 65 },
-  { id: "JOB-302", product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
-  { id: "JOB-303", product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned" },
-  { id: "JOB-304", product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned" },
-  { id: "JOB-305", product: "Ergonomic Chair – Black", qty: 12, due: "Aug 6", status: "Completed" },
-  { id: "JOB-306", product: "Reception Desk – L-Shape", qty: 3, due: "Aug 14", status: "Planned" },
-  { id: "JOB-307", product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed" },
+  { id: "JOB-301", number: "JOB-301", product: "Executive Desk – Walnut", qty: 17, due: "Aug 8", status: "In Progress", progress: 65 },
+  { id: "JOB-302", number: "JOB-302", product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
+  { id: "JOB-303", number: "JOB-303", product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned" },
+  { id: "JOB-304", number: "JOB-304", product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned" },
+  { id: "JOB-305", number: "JOB-305", product: "Ergonomic Chair – Black", qty: 12, due: "Aug 6", status: "Completed" },
+  { id: "JOB-306", number: "JOB-306", product: "Reception Desk – L-Shape", qty: 3, due: "Aug 14", status: "Planned" },
+  { id: "JOB-307", number: "JOB-307", product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed" },
 ];
 
 export const CUSTOMER_SEED: CustomerProps[] = [

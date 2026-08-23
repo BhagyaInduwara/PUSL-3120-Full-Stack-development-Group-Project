@@ -1,11 +1,14 @@
-import type { Order } from "@/domain/Order";
+import type { Order, OrderStatus } from "@/domain/Order";
 import { Card } from "@/components/ui/Card";
-import { StatusTag } from "@/components/ui/Tag";
+import { StatusTag, Tag } from "@/components/ui/Tag";
+import { StatusPalette } from "@/domain/StatusBadge";
 
 interface OrderCardProps {
   order: Order;
   /** Precomputed by the page (joins the order's line items against Production Jobs) — see OrderBoard.productionStatusFor. */
   productionStatusWord: string;
+  /** Set while this card has a drag-and-drop move awaiting Save/Undo (see sales/page.tsx) — shows the target status instead of the real one, and a dashed outline so it reads as unconfirmed. */
+  pendingStatus?: OrderStatus;
   onDragStart: (e: React.DragEvent) => void;
   onClick?: () => void;
 }
@@ -13,15 +16,21 @@ interface OrderCardProps {
 const VISIBLE_ITEMS = 2;
 
 /** OrderCard — one draggable Kanban card. Shows up to two line items, then "+N more item(s)", then a date/production-status/amount footer. */
-export function OrderCard({ order, productionStatusWord, onDragStart, onClick }: OrderCardProps) {
+export function OrderCard({ order, productionStatusWord, pendingStatus, onDragStart, onClick }: OrderCardProps) {
   const visible = order.lineItems.slice(0, VISIBLE_ITEMS);
   const extra = order.lineItems.length - visible.length;
 
   return (
-    <Card draggable onDragStart={onDragStart} onClick={onClick} elevation="sm" className="cursor-grab gap-2">
+    <Card
+      draggable
+      onDragStart={onDragStart}
+      onClick={onClick}
+      elevation="sm"
+      className={`cursor-grab gap-2 ${pendingStatus ? "border border-dashed border-[var(--color-accent)]" : ""}`}
+    >
       <div className="flex justify-between items-center">
         <span className="text-xs font-semibold">{order.number}</span>
-        <StatusTag entity={order} />
+        {pendingStatus ? <Tag style={StatusPalette.styleFor(pendingStatus)}>{pendingStatus}</Tag> : <StatusTag entity={order} />}
       </div>
       <div className="text-[13px] font-medium">{order.customer}</div>
 

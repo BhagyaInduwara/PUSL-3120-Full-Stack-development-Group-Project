@@ -36,6 +36,7 @@ interface ApiOrder {
 
 interface ApiProductionJob {
   _id: string;
+  number: string;
   product: string;
   qty: number;
   due: string;
@@ -75,6 +76,7 @@ function toOrder(o: ApiOrder): Order {
 function toJob(j: ApiProductionJob): ProductionJob {
   return new ProductionJob({
     id: j._id,
+    number: j.number,
     product: j.product,
     qty: j.qty,
     due: j.due,

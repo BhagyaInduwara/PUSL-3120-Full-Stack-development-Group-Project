@@ -37,7 +37,7 @@ export function RecordDialog({
   onCancelEdit,
   children,
 }: RecordDialogProps) {
-  const [mode, setMode] = useState<"view" | "edit">("view");
+  const [mode, setMode] = useState<"view" | "edit" | "confirm">("view");
 
   return (
     <div
@@ -61,43 +61,57 @@ export function RecordDialog({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 text-sm">{children(mode)}</div>
+        <div className="flex flex-col gap-3 text-sm">{children(mode === "confirm" ? "edit" : mode)}</div>
 
-        <div className="flex justify-between items-center gap-2 pt-3 border-t border-[var(--color-divider)]">
-          <div>
-            {editable && mode === "view" && (
-              <Button variant="secondary" onClick={() => setMode("edit")}>
-                Edit
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-2">
-            {mode === "edit" ? (
-              <>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    onCancelEdit?.();
-                    setMode("view");
-                  }}
-                >
-                  Cancel
+        <div className="flex flex-col gap-2.5 pt-3 border-t border-[var(--color-divider)]">
+          {mode === "confirm" && (
+            <div className="text-[13px] text-[var(--color-neutral-500)]">Save these changes to {title}?</div>
+          )}
+          <div className="flex justify-between items-center gap-2">
+            <div>
+              {editable && mode === "view" && (
+                <Button variant="secondary" onClick={() => setMode("edit")}>
+                  Edit
                 </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    onSave();
-                    setMode("view");
-                  }}
-                >
-                  Save changes
+              )}
+            </div>
+            <div className="flex gap-2">
+              {mode === "confirm" ? (
+                <>
+                  <Button variant="ghost" onClick={() => setMode("edit")}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      onSave();
+                      setMode("view");
+                    }}
+                  >
+                    Confirm &amp; save
+                  </Button>
+                </>
+              ) : mode === "edit" ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      onCancelEdit?.();
+                      setMode("view");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button variant="primary" onClick={() => setMode("confirm")}>
+                    Save changes
+                  </Button>
+                </>
+              ) : (
+                <Button variant="secondary" onClick={onClose}>
+                  Close
                 </Button>
-              </>
-            ) : (
-              <Button variant="secondary" onClick={onClose}>
-                Close
-              </Button>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>

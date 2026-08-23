@@ -21,17 +21,25 @@ const shipmentSchema = new Schema(
 export type ShipmentAttrs = InferSchemaType<typeof shipmentSchema>;
 export type ShipmentDocument = HydratedDocument<ShipmentAttrs>;
 
-/** Handles both populated (list) and unpopulated (get/create/update) orderId via Document.populated(). */
+/** Handles both populated (list) and unpopulated (get/create/update) orderId/invoiceId via Document.populated(). */
 export function toPublicShipment(shipment: ShipmentDocument) {
   const orderPopulated = shipment.populated("orderId");
   const orderVal = shipment.orderId as unknown;
+
+  const invoicePopulated = shipment.invoiceId && shipment.populated("invoiceId");
+  const invoiceVal = shipment.invoiceId as unknown as { _id: Types.ObjectId; number: string } | Types.ObjectId | null;
 
   return {
     id: shipment._id.toString(),
     number: shipment.number,
     orderId: orderPopulated ? (orderVal as OrderDocument)._id.toString() : (orderVal as Types.ObjectId).toString(),
     order: orderPopulated ? toPublicOrder(orderVal as OrderDocument) : undefined,
-    invoiceId: shipment.invoiceId ? (shipment.invoiceId as Types.ObjectId).toString() : null,
+    invoiceId: shipment.invoiceId
+      ? invoicePopulated
+        ? (invoiceVal as { _id: Types.ObjectId })._id.toString()
+        : (invoiceVal as Types.ObjectId).toString()
+      : null,
+    invoice: invoicePopulated ? { id: (invoiceVal as { _id: Types.ObjectId })._id.toString(), number: (invoiceVal as { number: string }).number } : undefined,
     status: shipment.status,
     date: shipment.date,
     createdAt: shipment.createdAt as Date,
