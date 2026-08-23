@@ -20,11 +20,23 @@ const COLUMNS: Column[] = [
   { status: "Closed", label: "Closed", variant: "neutral", dim: true },
 ];
 
+interface PendingMove {
+  orderId: string;
+  status: OrderStatus;
+}
+
 interface OrderBoardProps {
   orders: Order[];
   jobs: ProductionJob[];
+  /** A drag that's moved a card but hasn't been Saved yet — see sales/page.tsx. The card renders in its target column with a dashed outline until confirmed. */
+  pendingMove: PendingMove | null;
   onMove: (orderId: string, status: OrderStatus) => void;
   onSelect: (order: Order) => void;
+}
+
+/** The status a card should render/group under — its pending target if one's in flight, otherwise its real status. */
+function displayStatus(order: Order, pendingMove: PendingMove | null): OrderStatus {
+  return pendingMove && pendingMove.orderId === order.id ? pendingMove.status : order.status;
 }
 
 /** Finds a Production Job whose product matches any of the order's line items, and returns a display word for its status; "Not planned" if none matches. */
@@ -35,7 +47,7 @@ function productionStatusFor(order: Order, jobs: ProductionJob[]): string {
 }
 
 /** OrderBoard — 5-column drag-and-drop Kanban. Each column owns its own onDragOver/onDrop; dragged order id travels via the native DataTransfer API. */
-export function OrderBoard({ orders, jobs, onMove, onSelect }: OrderBoardProps) {
+export function OrderBoard({ orders, jobs, pendingMove, onMove, onSelect }: OrderBoardProps) {
   const handleDrop = (status: OrderStatus) => (e: DragEvent) => {
     e.preventDefault();
     const orderId = e.dataTransfer.getData("text/plain");
@@ -45,7 +57,7 @@ export function OrderBoard({ orders, jobs, onMove, onSelect }: OrderBoardProps) 
   return (
     <div className="grid grid-cols-5 gap-3.5 items-start">
       {COLUMNS.map((col) => {
-        const columnOrders = orders.filter((o) => o.status === col.status);
+        const columnOrders = orders.filter((o) => displayStatus(o, pendingMove) === col.status);
         const columnTotal = columnOrders.reduce((sum, o) => sum.add(o.amount), Money.zero());
         return (
           <div
@@ -66,6 +78,7 @@ export function OrderBoard({ orders, jobs, onMove, onSelect }: OrderBoardProps) 
                   <OrderCard
                     order={order}
                     productionStatusWord={productionStatusFor(order, jobs)}
+                    pendingStatus={pendingMove?.orderId === order.id ? pendingMove.status : undefined}
                     onDragStart={(e) => e.dataTransfer.setData("text/plain", order.id)}
                     onClick={() => onSelect(order)}
                   />
