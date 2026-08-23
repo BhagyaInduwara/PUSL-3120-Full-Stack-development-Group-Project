@@ -12,6 +12,7 @@ const API_URL = "http://localhost:4000";
 
 interface ApiProductionJob {
   _id: string;
+  number: string;
   product: string;
   qty: number;
   due: string;
@@ -27,6 +28,7 @@ function formatDue(iso: string): string {
 function toProductionJob(job: ApiProductionJob): ProductionJob {
   return new ProductionJob({
     id: job._id,
+    number: job.number,
     product: job.product,
     qty: job.qty,
     due: formatDue(job.due),

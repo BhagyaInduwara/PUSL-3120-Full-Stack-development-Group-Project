@@ -67,13 +67,13 @@ export const SHIPMENT_SEED: ShipmentProps[] = [
 ];
 
 export const JOB_SEED: ProductionJobProps[] = [
-  { id: "JOB-301", product: "Executive Desk – Walnut", qty: 17, due: "Aug 8", status: "In Progress", progress: 65 },
-  { id: "JOB-302", product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
-  { id: "JOB-303", product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned" },
-  { id: "JOB-304", product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned" },
-  { id: "JOB-305", product: "Ergonomic Chair – Black", qty: 12, due: "Aug 6", status: "Completed" },
-  { id: "JOB-306", product: "Reception Desk – L-Shape", qty: 3, due: "Aug 14", status: "Planned" },
-  { id: "JOB-307", product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed" },
+  { id: "JOB-301", number: "JOB-301", product: "Executive Desk – Walnut", qty: 17, due: "Aug 8", status: "In Progress", progress: 65 },
+  { id: "JOB-302", number: "JOB-302", product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
+  { id: "JOB-303", number: "JOB-303", product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned" },
+  { id: "JOB-304", number: "JOB-304", product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned" },
+  { id: "JOB-305", number: "JOB-305", product: "Ergonomic Chair – Black", qty: 12, due: "Aug 6", status: "Completed" },
+  { id: "JOB-306", number: "JOB-306", product: "Reception Desk – L-Shape", qty: 3, due: "Aug 14", status: "Planned" },
+  { id: "JOB-307", number: "JOB-307", product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed" },
 ];
 
 export const CUSTOMER_SEED: CustomerProps[] = [

@@ -1,9 +1,9 @@
 /**
  * One-time (but idempotent) backfill: assigns a human-readable `number`
- * (see ../utils/recordNumber.ts) to any existing Order/Invoice/Shipment
- * document that predates the field, in creation order, using each
- * document's own createdAt so the assigned numbers land on the right date
- * and stay consistent with numbers newly-created records get.
+ * (see ../utils/recordNumber.ts) to any existing Order/Invoice/Shipment/
+ * ProductionJob document that predates the field, in creation order, using
+ * each document's own createdAt so the assigned numbers land on the right
+ * date and stay consistent with numbers newly-created records get.
  *
  * Run with: npm run backfill:record-numbers
  */
@@ -31,6 +31,7 @@ async function main() {
   await backfillCollection("orders", "order");
   await backfillCollection("invoices", "invoice");
   await backfillCollection("shipments", "shipment");
+  await backfillCollection("productionjobs", "job");
   await mongoose.disconnect();
 }
 
