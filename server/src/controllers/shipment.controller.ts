@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Shipment, SHIPMENT_STATUSES, toPublicShipment } from "../models/Shipment.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
 
 function isValidStatus(value: unknown): value is (typeof SHIPMENT_STATUSES)[number] {
   return typeof value === "string" && (SHIPMENT_STATUSES as readonly string[]).includes(value);
@@ -42,7 +43,9 @@ export async function createShipment(req: Request, res: Response): Promise<void>
     return;
   }
 
+  const number = await generateRecordNumber("shipment", new Date());
   const shipment = await Shipment.create({
+    number,
     orderId,
     invoiceId: req.body?.invoiceId ?? null,
     status: req.body?.status,

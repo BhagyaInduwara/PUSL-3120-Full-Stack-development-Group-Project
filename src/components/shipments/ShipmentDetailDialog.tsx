@@ -9,19 +9,20 @@ import { Field, Input } from "@/components/ui/Input";
 interface ShipmentDetailDialogProps {
   shipment: Shipment;
   customer: string;
+  orderNumber: string;
   onClose: () => void;
   onSave: (patch: Partial<ShipmentEditableFields>) => void;
 }
 
 /** ShipmentDetailDialog — popup opened from the Shipments table. Editable only while the shipment is still a Draft (Shipment.canEdit). */
-export function ShipmentDetailDialog({ shipment, customer, onClose, onSave }: ShipmentDetailDialogProps) {
+export function ShipmentDetailDialog({ shipment, customer, orderNumber, onClose, onSave }: ShipmentDetailDialogProps) {
   const [date, setDate] = useState(shipment.date);
 
   const reset = () => setDate(shipment.date);
 
   return (
     <RecordDialog
-      title={shipment.id}
+      title={shipment.number}
       subtitle={`Shipment · ${customer}`}
       statusBadge={<StatusTag entity={shipment} />}
       editable={shipment.canEdit}
@@ -33,7 +34,7 @@ export function ShipmentDetailDialog({ shipment, customer, onClose, onSave }: Sh
         mode === "view" ? (
           <>
             <RecordRow label="Customer" value={customer} />
-            <RecordRow label="Order" value={shipment.orderId} />
+            <RecordRow label="Order" value={orderNumber} />
             <RecordRow label="Invoice" value={shipment.invoiceLabel} />
             <RecordRow label="Ship date" value={shipment.date} />
           </>

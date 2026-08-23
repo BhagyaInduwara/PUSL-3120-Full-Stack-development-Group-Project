@@ -240,9 +240,11 @@ export class ERPStore extends Observable {
     };
 
     for (const order of this.orders) {
-      const product = this.products.find((p) => p.name === order.product);
-      const category = product?.category ?? "Storage";
-      categoryUnits[category] = (categoryUnits[category] ?? 0) + order.qty;
+      for (const li of order.lineItems) {
+        const product = this.products.find((p) => p.name === li.product);
+        const category = product?.category ?? "Storage";
+        categoryUnits[category] = (categoryUnits[category] ?? 0) + li.qty;
+      }
     }
 
     const total = Object.values(categoryUnits).reduce((sum, u) => sum + u, 0) || 1;
@@ -256,7 +258,7 @@ export class ERPStore extends Observable {
   }
 
   get totalSalesUnits(): number {
-    return this.orders.reduce((sum, o) => sum + o.qty, 0);
+    return this.orders.reduce((sum, o) => sum + o.totalQty, 0);
   }
 
   /** Ranked list of top-selling products with sales volume, revenue, category, and inventory status. */
@@ -272,11 +274,13 @@ export class ERPStore extends Observable {
     const productStats: Record<string, { units: number; revenue: Money }> = {};
 
     for (const order of this.orders) {
-      if (!productStats[order.product]) {
-        productStats[order.product] = { units: 0, revenue: Money.zero() };
+      for (const li of order.lineItems) {
+        if (!productStats[li.product]) {
+          productStats[li.product] = { units: 0, revenue: Money.zero() };
+        }
+        productStats[li.product].units += li.qty;
+        productStats[li.product].revenue = productStats[li.product].revenue.add(new Money(li.qty * li.price));
       }
-      productStats[order.product].units += order.qty;
-      productStats[order.product].revenue = productStats[order.product].revenue.add(order.amount);
     }
 
     const sorted = Object.entries(productStats)

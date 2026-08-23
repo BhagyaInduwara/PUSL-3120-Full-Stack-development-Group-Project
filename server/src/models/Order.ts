@@ -5,20 +5,50 @@ import { Schema, model, type InferSchemaType, type HydratedDocument } from "mong
 export const ORDER_STATUSES = ["Draft", "Confirmed", "Invoiced", "Shipped", "Closed"] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
+// ---------------------------------------------------------------------------
+// Sub-schema: one line item inside an order — same embedding rationale as
+// IncomingOrderDraft's lineItemSchema (see that file): line items have no
+// independent existence outside their parent Order. qty/price keep
+// `required: true` here because that's what the old top-level Order fields
+// had — an order line without a quantity or price was never valid.
+// ---------------------------------------------------------------------------
+const lineItemSchema = new Schema({
+  product: {
+    type: String,
+    trim: true,
+  },
+  qty: {
+    type: Number,
+    required: true,
+    min: 1, // an order line must have at least 1 item
+  },
+  price: {
+    type: Number,
+    required: true,
+    min: 0, // price can be 0 (free) but never negative
+  },
+});
+
 const orderSchema = new Schema(
   {
+    // Human-readable display id, e.g. "2026/08/23/A001" — see
+    // ../utils/recordNumber.ts. Assigned once at creation, immutable after
+    // (order.controller.ts's updateOrder strips it from PUT bodies).
+    number: { type: String, required: true, unique: true },
+
     customer: { type: String, trim: true },
-    product: { type: String, trim: true },
-    qty: {
-      type: Number,
-      required: true,
-      min: 1, // an order must have at least 1 item
+
+    // An array of lineItemSchema sub-documents, embedded directly in this
+    // document — mirrors IncomingOrderDraft.lineItems. Unlike a draft, an
+    // order can never be empty, hence the length validator.
+    lineItems: {
+      type: [lineItemSchema],
+      validate: {
+        validator: (items: unknown[]) => Array.isArray(items) && items.length > 0,
+        message: "An order must have at least one line item.",
+      },
     },
-    price: {
-      type: Number,
-      required: true,
-      min: 0, // price can be 0 (free) but never negative
-    },
+
     status: {
       type: String,
       enum: ORDER_STATUSES,
@@ -40,12 +70,11 @@ const orderSchema = new Schema(
   }
 );
 
-// Virtual field: amount = qty × price.
-// It is COMPUTED on read — never stored in MongoDB. This means:
-//   - No double-storing (storing qty, price AND amount) that could go out of sync
-//   - Always accurate; if price is updated, amount updates automatically
+// Virtual field: amount = sum(qty × price) across every line item.
+// It is COMPUTED on read — never stored in MongoDB, so it can't drift out
+// of sync with a line item edit.
 orderSchema.virtual("amount").get(function () {
-  return this.qty * this.price;
+  return (this.lineItems ?? []).reduce((sum, li) => sum + li.qty * li.price, 0);
 });
 
 // InferSchemaType lets TypeScript derive the document type directly from the
@@ -58,18 +87,18 @@ export type OrderDocument = HydratedDocument<OrderAttrs>;
 /**
  * Used by Invoice.ts/Shipment.ts's toPublicInvoice()/toPublicShipment() to
  * embed the linked order's details when it's been .populate()'d — see those
- * files. Includes the `amount` virtual explicitly since toPublicOrder builds
+ * files. Includes the `amount` total explicitly since toPublicOrder builds
  * a plain object field-by-field rather than calling .toJSON()/.toObject()
  * (which is what actually applies the virtuals:true option above).
  */
 export function toPublicOrder(order: OrderDocument) {
+  const lineItems = (order.lineItems ?? []).map((li) => ({ product: li.product, qty: li.qty, price: li.price }));
   return {
     id: order._id.toString(),
+    number: order.number,
     customer: order.customer,
-    product: order.product,
-    qty: order.qty,
-    price: order.price,
-    amount: order.qty * order.price,
+    lineItems,
+    amount: lineItems.reduce((sum, li) => sum + li.qty * li.price, 0),
     status: order.status,
     date: order.date,
     createdAt: order.createdAt as Date,

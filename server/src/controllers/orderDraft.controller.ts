@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { IncomingOrderDraft } from "../models/IncomingOrderDraft.js";
 import { Order } from "../models/Order.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
 
 // ---------------------------------------------------------------------------
 // GET /api/order-drafts
@@ -70,7 +71,7 @@ export async function deleteDraft(req: Request, res: Response): Promise<void> {
 // FACTORY METHOD — converts an IncomingOrderDraft into a real Order.
 //   1. Find the draft
 //   2. Validate it has at least one line item
-//   3. Create a new Order from the first line item (status: "Confirmed")
+//   3. Create a new Order carrying over every line item (status: "Confirmed")
 //   4. Delete the draft — it has been consumed
 //   5. Return the newly created Order (201 Created)
 // ---------------------------------------------------------------------------
@@ -87,14 +88,12 @@ export async function approveDraft(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const firstItem = draft.lineItems[0];
-
   // Create the Order — status "Confirmed" because a human has reviewed it
+  const number = await generateRecordNumber("order", new Date());
   const order = await Order.create({
+    number,
     customer: draft.customer,
-    product: firstItem.product,
-    qty: firstItem.qty,
-    price: firstItem.price,
+    lineItems: draft.lineItems.map((li) => ({ product: li.product, qty: li.qty, price: li.price })),
     status: "Confirmed",
     date: new Date(),
   });

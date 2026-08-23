@@ -6,6 +6,10 @@ export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number];
 
 const shipmentSchema = new Schema(
   {
+    // Human-readable display id, e.g. "2026/08/23/A001" — see
+    // ../utils/recordNumber.ts. Assigned once at creation, immutable after.
+    number: { type: String, required: true, unique: true },
+
     orderId: { type: Schema.Types.ObjectId, ref: "Order", required: true },
     invoiceId: { type: Schema.Types.ObjectId, ref: "Invoice", default: null },
     status: { type: String, enum: SHIPMENT_STATUSES, default: "Draft" },
@@ -24,6 +28,7 @@ export function toPublicShipment(shipment: ShipmentDocument) {
 
   return {
     id: shipment._id.toString(),
+    number: shipment.number,
     orderId: orderPopulated ? (orderVal as OrderDocument)._id.toString() : (orderVal as Types.ObjectId).toString(),
     order: orderPopulated ? toPublicOrder(orderVal as OrderDocument) : undefined,
     invoiceId: shipment.invoiceId ? (shipment.invoiceId as Types.ObjectId).toString() : null,

@@ -1,5 +1,31 @@
 import type { Request, Response } from "express";
 import { Order, ORDER_STATUSES, type OrderStatus } from "../models/Order.js";
+import { generateRecordNumber } from "../utils/recordNumber.js";
+
+interface OrderLineItemBody {
+  product: string;
+  qty: number;
+  price: number;
+}
+
+function isValidLineItems(value: unknown): value is OrderLineItemBody[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((li) => {
+      const item = li as Record<string, unknown>;
+      return (
+        li &&
+        typeof li === "object" &&
+        typeof item.product === "string" &&
+        typeof item.qty === "number" &&
+        item.qty >= 1 &&
+        typeof item.price === "number" &&
+        item.price >= 0
+      );
+    })
+  );
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/orders
@@ -30,7 +56,13 @@ export async function getOrder(req: Request, res: Response): Promise<void> {
 // Creates a new order from the JSON body the client sends.
 // ---------------------------------------------------------------------------
 export async function createOrder(req: Request, res: Response): Promise<void> {
-  const order = await Order.create(req.body);
+  if (!isValidLineItems(req.body?.lineItems)) {
+    res.status(400).json({ error: "lineItems must be a non-empty array of { product, qty >= 1, price >= 0 }." });
+    return;
+  }
+
+  const number = await generateRecordNumber("order", new Date());
+  const order = await Order.create({ ...req.body, number });
   res.status(201).json(order);
 }
 
@@ -39,9 +71,18 @@ export async function createOrder(req: Request, res: Response): Promise<void> {
 // Replaces editable fields with the values from req.body.
 // ---------------------------------------------------------------------------
 export async function updateOrder(req: Request, res: Response): Promise<void> {
+  if (req.body?.lineItems !== undefined && !isValidLineItems(req.body.lineItems)) {
+    res.status(400).json({ error: "lineItems must be a non-empty array of { product, qty >= 1, price >= 0 }." });
+    return;
+  }
+
+  // number is assigned once at creation and never client-editable — strip it
+  // even if a PUT body includes one, rather than trust the caller.
+  const { number: _ignoredNumber, ...editableFields } = req.body ?? {};
+
   const order = await Order.findByIdAndUpdate(
     req.params.id,
-    req.body,
+    editableFields,
     {
       new: true,           // return the document AFTER the update
       runValidators: true, // re-run schema validators on the new values

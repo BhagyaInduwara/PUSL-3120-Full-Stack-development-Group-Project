@@ -28,8 +28,8 @@ export function InvoiceDetailDialog({ invoice, order, onClose, onSave, onMarkPai
 
   return (
     <RecordDialog
-      title={invoice.id}
-      subtitle={`Invoice · linked order ${invoice.orderId}`}
+      title={invoice.number}
+      subtitle={`Invoice · linked order ${order?.number ?? invoice.orderId}`}
       statusBadge={<StatusTag entity={invoice} />}
       editable={invoice.canEdit}
       onClose={onClose}
@@ -40,8 +40,13 @@ export function InvoiceDetailDialog({ invoice, order, onClose, onSave, onMarkPai
         mode === "view" ? (
           <>
             <RecordRow label="Bill to" value={order?.customer ?? "—"} />
-            <RecordRow label="Item" value={order?.product ?? "—"} />
-            <RecordRow label="Qty" value={order?.qty ?? "—"} />
+            {order && order.lineItems.length > 0 ? (
+              order.lineItems.map((li, i) => (
+                <RecordRow key={i} label={li.product} value={`×${li.qty}`} />
+              ))
+            ) : (
+              <RecordRow label="Items" value="—" />
+            )}
             <RecordRow label="Issue date" value={invoice.issueDate} />
             <RecordRow label="Due date" value={invoice.dueDate} />
             <RecordRow label="Total" value={order?.amountFormatted ?? "—"} />

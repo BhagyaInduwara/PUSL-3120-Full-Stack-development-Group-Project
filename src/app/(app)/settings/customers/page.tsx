@@ -1,12 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useERPStore } from "@/store/useERPStore";
 import { Table, type Column } from "@/components/ui/Table";
 import { Button } from "@/components/ui/Button";
 import { AddCustomerDialog } from "@/components/settings/AddCustomerDialog";
-import type { Customer } from "@/domain/Customer";
+import { Customer } from "@/domain/Customer";
+
+const API_URL = "http://localhost:4000";
+
+interface ApiCustomer {
+  id: string;
+  name: string;
+  contact: string;
+  email: string;
+  city: string;
+}
+
+function toCustomer(c: ApiCustomer): Customer {
+  return new Customer({ id: c.id, name: c.name, contact: c.contact, email: c.email, city: c.city });
+}
+
+async function fetchCustomers(): Promise<Customer[]> {
+  const res = await fetch(`${API_URL}/api/customers`, { credentials: "include" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.customers as ApiCustomer[]).map(toCustomer);
+}
 
 const columns: Column<Customer>[] = [
   { header: "Customer", cell: (c) => <span className="font-semibold">{c.name}</span> },
@@ -16,9 +36,34 @@ const columns: Column<Customer>[] = [
 ];
 
 export default function CustomersSettingsPage() {
-  const store = useERPStore();
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setCustomers(await fetchCustomers());
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+      }
+    })();
+  }, []);
+
+  async function handleAddCustomer(data: { name: string; contact: string; email: string; city: string }) {
+    try {
+      await fetch(`${API_URL}/api/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      setDialogOpen(false);
+      setCustomers(await fetchCustomers());
+    } catch (error) {
+      console.error("Error adding customer:", error);
+    }
+  }
 
   return (
     <>
@@ -29,21 +74,12 @@ export default function CustomersSettingsPage() {
       </div>
       <Table
         columns={columns}
-        rows={store.customers}
+        rows={customers}
         rowKey={(c) => c.id}
         onRowClick={(c) => router.push(`/settings/customers/${c.id}`)}
       />
 
-      {dialogOpen && (
-        <AddCustomerDialog
-          onClose={() => setDialogOpen(false)}
-          onSubmit={(data) => {
-            store.addCustomer(data);
-            setDialogOpen(false);
-          }}
-        />
-      )}
+      {dialogOpen && <AddCustomerDialog onClose={() => setDialogOpen(false)} onSubmit={handleAddCustomer} />}
     </>
   );
 }
-

@@ -1,5 +1,7 @@
 import type { DragEvent } from "react";
 import type { Order, OrderStatus } from "@/domain/Order";
+import type { ProductionJob } from "@/domain/ProductionJob";
+import { Money } from "@/domain/Money";
 import { Tag } from "@/components/ui/Tag";
 import { OrderCard } from "./OrderCard";
 
@@ -20,12 +22,20 @@ const COLUMNS: Column[] = [
 
 interface OrderBoardProps {
   orders: Order[];
+  jobs: ProductionJob[];
   onMove: (orderId: string, status: OrderStatus) => void;
   onSelect: (order: Order) => void;
 }
 
+/** Finds a Production Job whose product matches any of the order's line items, and returns a display word for its status; "Not planned" if none matches. */
+function productionStatusFor(order: Order, jobs: ProductionJob[]): string {
+  const products = new Set(order.lineItems.map((li) => li.product));
+  const job = jobs.find((j) => products.has(j.product));
+  return job ? job.status : "Not planned";
+}
+
 /** OrderBoard — 5-column drag-and-drop Kanban. Each column owns its own onDragOver/onDrop; dragged order id travels via the native DataTransfer API. */
-export function OrderBoard({ orders, onMove, onSelect }: OrderBoardProps) {
+export function OrderBoard({ orders, jobs, onMove, onSelect }: OrderBoardProps) {
   const handleDrop = (status: OrderStatus) => (e: DragEvent) => {
     e.preventDefault();
     const orderId = e.dataTransfer.getData("text/plain");
@@ -36,6 +46,7 @@ export function OrderBoard({ orders, onMove, onSelect }: OrderBoardProps) {
     <div className="grid grid-cols-5 gap-3.5 items-start">
       {COLUMNS.map((col) => {
         const columnOrders = orders.filter((o) => o.status === col.status);
+        const columnTotal = columnOrders.reduce((sum, o) => sum.add(o.amount), Money.zero());
         return (
           <div
             key={col.status}
@@ -44,7 +55,9 @@ export function OrderBoard({ orders, onMove, onSelect }: OrderBoardProps) {
             className="min-h-[120px]"
           >
             <div className={`flex items-center justify-between mb-2.5 ${col.dim ? "opacity-60" : ""}`}>
-              <span className="text-xs font-semibold tracking-wide">{col.label}</span>
+              <span className="text-xs font-semibold tracking-wide">
+                {col.label} <span className="font-normal text-[var(--color-neutral-500)]">{columnTotal.format()}</span>
+              </span>
               <Tag variant={col.variant}>{columnOrders.length}</Tag>
             </div>
             <div className="flex flex-col gap-2.5">
@@ -52,6 +65,7 @@ export function OrderBoard({ orders, onMove, onSelect }: OrderBoardProps) {
                 <div key={order.id} className={col.dim ? "opacity-70" : ""}>
                   <OrderCard
                     order={order}
+                    productionStatusWord={productionStatusFor(order, jobs)}
                     onDragStart={(e) => e.dataTransfer.setData("text/plain", order.id)}
                     onClick={() => onSelect(order)}
                   />
