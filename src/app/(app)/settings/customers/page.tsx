@@ -7,7 +7,7 @@ import { AddCustomerDialog } from "@/components/settings/AddCustomerDialog";
 import { CustomerDetailDialog, type CustomerEditableFields } from "@/components/settings/CustomerDetailDialog";
 import { Customer } from "@/domain/Customer";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 interface ApiCustomer {
   id: string;

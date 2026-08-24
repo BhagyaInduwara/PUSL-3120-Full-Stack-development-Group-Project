@@ -16,7 +16,7 @@ import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 import { InventoryItem } from "@/domain/InventoryItem";
 import { Money } from "@/domain/Money";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Seating: "#818cf8",

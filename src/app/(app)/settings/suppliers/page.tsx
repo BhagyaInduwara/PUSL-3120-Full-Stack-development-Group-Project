@@ -7,7 +7,7 @@ import { AddSupplierDialog, type AddSupplierData } from "@/components/settings/A
 import { SupplierDetailDialog, type SupplierEditableFields } from "@/components/settings/SupplierDetailDialog";
 import { Supplier } from "@/domain/Supplier";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 interface ApiSupplier {
   id: string;
