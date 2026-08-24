@@ -1,12 +1,17 @@
 /**
- * The Express backend's base URL, for client-side fetches (pages under
- * "use client" run in the browser, so this needs the NEXT_PUBLIC_ prefix
- * to be embedded in the bundle at build time — see
- * https://nextjs.org/docs/app/guides/environment-variables).
+ * Base URL client-side pages prefix onto every API path, e.g.
+ * `${API_URL}/api/orders`. This is intentionally empty — every such call
+ * now goes through this app's own same-origin catch-all proxy
+ * (src/app/api/[...path]/route.ts), which forwards it server-to-server to
+ * the real Express backend with the session cookie attached manually.
  *
- * Defaults to localhost:4000 for local dev; in production (Vercel) this
- * must be set to wherever /server is actually deployed (e.g. Render),
- * or every client-side fetch silently tries to reach the visitor's own
- * machine instead of the real backend.
+ * It used to point straight at the backend's own domain
+ * (NEXT_PUBLIC_API_URL), which works fine locally (frontend/backend share
+ * the "localhost" hostname) but breaks once frontend and backend are on
+ * genuinely different domains in production: modern browsers block
+ * third-party cookies, so a cookie set by the backend's domain while
+ * browsing the frontend's domain never actually gets stored, no matter
+ * how correctly SameSite/Secure are configured — see the proxy route's
+ * own comment, and CLAUDE.md "Authentication & Users", for the full story.
  */
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+export const API_URL = "";

@@ -5,18 +5,14 @@ import { useRouter } from "next/navigation";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Field, Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { API_URL } from "@/lib/apiUrl";
 
 /**
  * Login & Registration page — outside the (app) route group, so it renders without the
- * Sidebar shell. Posts credentials twice on submit: once to /api/auth/login (or /register),
- * which proxies to the Express backend and sets a cookie scoped to *this* (frontend) domain
- * — that's what proxy.ts middleware checks to gate routes — and once directly to the backend
- * from the browser, so it also sets its own cookie on *its* domain, which every page's
- * client-side data fetches need since they call the backend directly with credentials:
- * "include". Cookies don't cross domains, so one login response can't cover both; when
- * frontend and backend happen to share an origin (local dev), the second call is harmless
- * and redundant rather than necessary. On success, redirects to /dashboard.
+ * Sidebar shell. Posts credentials to /api/auth/login (or /register), which proxies to the
+ * Express backend and sets the session cookie on this (frontend) domain — the only cookie
+ * needed anywhere now, since proxy.ts checks it for route gating and every data fetch goes
+ * through this app's own catch-all API proxy (src/app/api/[...path]/route.ts) rather than
+ * the browser ever talking to the backend's domain directly. On success, redirects to /dashboard.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -34,22 +30,14 @@ export default function LoginPage() {
     const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
 
     try {
-      const [res, backendRes] = await Promise.all([
-        fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        }),
-        fetch(`${API_URL}${endpoint}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ username, password }),
-        }),
-      ]);
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
       const data = await res.json();
 
-      if (!res.ok || !backendRes.ok) {
+      if (!res.ok) {
         setError(data.error ?? "Something went wrong. Please try again.");
         setSubmitting(false);
         return;
