@@ -7,7 +7,7 @@ import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AdjustStockModal, type AdjustStockData } from "@/components/inventory/AdjustStockModal";
 import { InventoryItem } from "@/domain/InventoryItem";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 interface ApiInventoryItem {
   _id: string;

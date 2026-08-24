@@ -8,7 +8,7 @@ import { InvoiceDetailDialog } from "@/components/invoicing/InvoiceDetailDialog"
 import { Invoice, type InvoiceEditableFields, type InvoiceStatus } from "@/domain/Invoice";
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 function fmtDate(value: string): string {
   if (!value) return value;

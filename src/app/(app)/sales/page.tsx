@@ -15,7 +15,7 @@ import { NewOrderDrawer } from "@/components/sales/NewOrderDrawer";
 import { OrderDetailDialog } from "@/components/sales/OrderDetailDialog";
 import { PendingMoveBanner } from "@/components/sales/PendingMoveBanner";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 type View = "board" | "table";
 
 interface ApiOrder {

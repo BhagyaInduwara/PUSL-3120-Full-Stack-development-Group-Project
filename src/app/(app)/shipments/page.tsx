@@ -8,7 +8,7 @@ import { ShipmentDetailDialog } from "@/components/shipments/ShipmentDetailDialo
 import { Shipment, type ShipmentEditableFields, type ShipmentStatus } from "@/domain/Shipment";
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 function fmtDate(value: string): string {
   if (!value) return value;
