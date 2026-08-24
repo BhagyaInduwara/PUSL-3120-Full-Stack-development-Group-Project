@@ -14,6 +14,7 @@ import {
   LogoutIcon,
 } from "@/components/icons";
 import type { PublicUser } from "@/domain/User";
+import { API_URL } from "@/lib/apiUrl";
 
 interface NavItem {
   href: string;
@@ -50,7 +51,13 @@ export function Sidebar({ user }: { user: PublicUser }) {
 
   async function handleLogout() {
     setLoggingOut(true);
-    await fetch("/api/auth/logout", { method: "POST" });
+    // Clears the frontend-domain cookie (via the proxy route) and the
+    // backend-domain cookie directly — see login/page.tsx for why both
+    // exist when frontend and backend are on different domains.
+    await Promise.all([
+      fetch("/api/auth/logout", { method: "POST" }),
+      fetch(`${API_URL}/api/auth/logout`, { method: "POST", credentials: "include" }),
+    ]);
     router.push("/login");
     router.refresh();
   }
