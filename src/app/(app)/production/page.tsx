@@ -8,7 +8,7 @@ import { JobDetailDialog } from "@/components/production/JobDetailDialog";
 import { NewJobModal } from "@/components/production/NewJobModal";
 import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 interface ApiProductionJob {
   _id: string;

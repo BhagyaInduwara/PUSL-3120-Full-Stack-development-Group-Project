@@ -7,7 +7,7 @@ import { AddProductDialog, type AddProductData } from "@/components/settings/Add
 import { ProductDetailDialog, type ProductEditableFields } from "@/components/settings/ProductDetailDialog";
 import { Product } from "@/domain/Product";
 
-const API_URL = "http://localhost:4000";
+import { API_URL } from "@/lib/apiUrl";
 
 interface ApiProduct {
   id: string;
