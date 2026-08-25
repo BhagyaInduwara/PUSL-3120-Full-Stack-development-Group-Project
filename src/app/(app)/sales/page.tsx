@@ -13,7 +13,7 @@ import { OrderBoard } from "@/components/sales/OrderBoard";
 import { OrderTable } from "@/components/sales/OrderTable";
 import { NewOrderDrawer } from "@/components/sales/NewOrderDrawer";
 import { OrderDetailDialog } from "@/components/sales/OrderDetailDialog";
-import { PendingMoveBanner } from "@/components/sales/PendingMoveBanner";
+import { PendingMoveBanner } from "@/components/ui/PendingMoveBanner";
 
 import { API_URL } from "@/lib/apiUrl";
 type View = "board" | "table";
@@ -283,7 +283,7 @@ export default function SalesPage() {
           const order = orders.find((o) => o.id === pendingMove.orderId);
           return order ? (
             <PendingMoveBanner
-              order={order}
+              label={order.number}
               fromStatus={pendingMove.fromStatus}
               toStatus={pendingMove.toStatus}
               onSave={handleSaveMove}

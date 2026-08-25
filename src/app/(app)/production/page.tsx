@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { JobColumn } from "@/components/production/JobColumn";
 import { JobDetailDialog } from "@/components/production/JobDetailDialog";
 import { NewJobModal } from "@/components/production/NewJobModal";
+import { PendingMoveBanner } from "@/components/ui/PendingMoveBanner";
 import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 
 import { API_URL } from "@/lib/apiUrl";
@@ -49,6 +50,9 @@ export default function ProductionPage() {
   const [jobs, setJobs] = useState<ProductionJob[]>([]);
   const [selectedJob, setSelectedJob] = useState<ProductionJob | null>(null);
   const [isNewJobOpen, setIsNewJobOpen] = useState(false);
+  const [pendingMove, setPendingMove] = useState<{ jobId: string; fromStatus: JobStatus; toStatus: JobStatus } | null>(
+    null
+  );
 
   useEffect(() => {
     (async () => {
@@ -99,6 +103,40 @@ export default function ProductionPage() {
     }
   }
 
+  /** Dragging a card only stages the move — see PendingMoveBanner. Nothing is sent to the server until handleSaveMove. */
+  function handleMove(jobId: string, toStatus: JobStatus) {
+    const job = jobs.find((j) => j.id === jobId);
+    if (!job) return;
+
+    // Dropped back onto its own real column — same as clicking Undo.
+    if (toStatus === job.status) {
+      setPendingMove(null);
+      return;
+    }
+
+    setPendingMove({ jobId, fromStatus: job.status, toStatus });
+  }
+
+  function handleUndoMove() {
+    setPendingMove(null);
+  }
+
+  async function handleSaveMove() {
+    if (!pendingMove) return;
+    try {
+      await fetch(`${API_URL}/api/production-jobs/${pendingMove.jobId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status: pendingMove.toStatus }),
+      });
+      setPendingMove(null);
+      setJobs(await fetchJobs());
+    } catch (error) {
+      console.error("Error updating job status:", error);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -114,22 +152,31 @@ export default function ProductionPage() {
         <div className="grid grid-cols-3 gap-4">
           <JobColumn
             label="Planned"
-            jobs={jobs.filter((j) => j.status === "Planned")}
+            status="Planned"
+            jobs={jobs}
             variant="neutral"
+            pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
             onSelect={setSelectedJob}
+            onMove={handleMove}
           />
           <JobColumn
             label="In Progress"
-            jobs={jobs.filter((j) => j.status === "In Progress")}
+            status="In Progress"
+            jobs={jobs}
             variant="accent"
+            pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
             onSelect={setSelectedJob}
+            onMove={handleMove}
           />
           <JobColumn
             label="Completed"
-            jobs={jobs.filter((j) => j.status === "Completed")}
+            status="Completed"
+            jobs={jobs}
             variant="neutral"
             dim
+            pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
             onSelect={setSelectedJob}
+            onMove={handleMove}
           />
         </div>
       </div>
@@ -139,6 +186,20 @@ export default function ProductionPage() {
       )}
 
       {isNewJobOpen && <NewJobModal onClose={() => setIsNewJobOpen(false)} onSubmit={handleCreateJob} />}
+
+      {pendingMove &&
+        (() => {
+          const job = jobs.find((j) => j.id === pendingMove.jobId);
+          return job ? (
+            <PendingMoveBanner
+              label={job.number}
+              fromStatus={pendingMove.fromStatus}
+              toStatus={pendingMove.toStatus}
+              onSave={handleSaveMove}
+              onUndo={handleUndoMove}
+            />
+          ) : null;
+        })()}
     </>
   );
 }
