@@ -12,6 +12,7 @@ import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 import { OrderBoard } from "@/components/sales/OrderBoard";
 import { OrderTable } from "@/components/sales/OrderTable";
 import { NewOrderDrawer } from "@/components/sales/NewOrderDrawer";
+import { NewOrderDialog, type NewOrderData } from "@/components/sales/NewOrderDialog";
 import { OrderDetailDialog } from "@/components/sales/OrderDetailDialog";
 import { PendingMoveBanner } from "@/components/ui/PendingMoveBanner";
 
@@ -104,6 +105,8 @@ export default function SalesPage() {
   const [view, setView] = useState<View>("board");
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [newOrderError, setNewOrderError] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [pendingMove, setPendingMove] = useState<{ orderId: string; fromStatus: OrderStatus; toStatus: OrderStatus } | null>(
     null
@@ -189,6 +192,32 @@ export default function SalesPage() {
     }
   }
 
+  async function handleCreateOrder(data: NewOrderData) {
+    setNewOrderError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          customer: data.customer,
+          lineItems: data.lineItems,
+          date: new Date().toISOString(),
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setNewOrderError(body.error ?? "Couldn't create the order.");
+        return;
+      }
+      setNewOrderOpen(false);
+      setOrders(await fetchOrders());
+    } catch (error) {
+      console.error("Error creating order:", error);
+      setNewOrderError("Couldn't reach the server. Please try again.");
+    }
+  }
+
   function handleDraftLineItemChange(index: number, patch: Partial<DraftLineItem>) {
     setDraft((prev) => (prev ? prev.withLineItem(index, patch) : prev));
   }
@@ -242,7 +271,12 @@ export default function SalesPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <Button variant="primary" onClick={() => setDrawerOpen(true)} disabled={!draft}>
+            {draft && (
+              <Button variant="secondary" onClick={() => setDrawerOpen(true)}>
+                Review draft
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => setNewOrderOpen(true)}>
               New Order
               <PlusIcon />
             </Button>
@@ -275,6 +309,17 @@ export default function SalesPage() {
 
         {selectedOrder && (
           <OrderDetailDialog order={selectedOrder} onClose={() => setSelectedOrder(null)} onSave={handleSaveOrder} />
+        )}
+
+        {newOrderOpen && (
+          <NewOrderDialog
+            error={newOrderError}
+            onClose={() => {
+              setNewOrderOpen(false);
+              setNewOrderError(null);
+            }}
+            onSubmit={handleCreateOrder}
+          />
         )}
       </div>
 
