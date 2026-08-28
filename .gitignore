@@ -47,3 +47,7 @@ server/env
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local Postman app workspace state (per-machine, tied to a personal cloud workspace id)
+/.postman/
+/postman/
