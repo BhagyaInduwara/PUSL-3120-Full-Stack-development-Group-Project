@@ -6,6 +6,8 @@ export interface ProductionJobProps {
   id: string;
   /** Human-readable display id, e.g. "2026/08/23/A001" — distinct from `id` (the Mongo ObjectId used for routing/API calls). */
   number: string;
+  orderNumber?: string;
+  customer?: string;
   product: string;
   qty: number;
   due: string;
@@ -18,10 +20,16 @@ export interface ProductionJobEditableFields {
   product: string;
   qty: number;
   due: string;
+  orderNumber?: string;
+  customer?: string;
+  /** 0-100. Only editable while status is "In Progress". */
+  progress?: number;
 }
 
 export class ProductionJob extends Entity {
   readonly number: string;
+  readonly orderNumber?: string;
+  private _customer?: string;
   private _product: string;
   private _qty: number;
   private _due: string;
@@ -31,11 +39,17 @@ export class ProductionJob extends Entity {
   constructor(props: ProductionJobProps) {
     super(props.id);
     this.number = props.number;
+    this.orderNumber = props.orderNumber;
+    this._customer = props.customer;
     this._product = props.product;
     this._qty = props.qty;
     this._due = props.due;
     this.status = props.status;
     this.progress = props.progress ?? 0;
+  }
+
+  get customer(): string | undefined {
+    return this._customer;
   }
 
   get product(): string {
@@ -55,10 +69,16 @@ export class ProductionJob extends Entity {
     return this.status === "Planned";
   }
 
+  /** In Progress jobs can only update their completion percentage. */
+  get canEditProgress(): boolean {
+    return this.status === "In Progress";
+  }
+
   update(patch: Partial<ProductionJobEditableFields>): void {
     if (!this.canEdit) return;
     if (patch.product !== undefined) this._product = patch.product;
     if (patch.qty !== undefined) this._qty = patch.qty;
     if (patch.due !== undefined) this._due = patch.due;
+    if (patch.customer !== undefined) this._customer = patch.customer;
   }
 }

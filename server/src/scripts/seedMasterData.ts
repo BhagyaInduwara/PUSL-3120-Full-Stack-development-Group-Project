@@ -114,13 +114,13 @@ const SHIPMENT_SEED = [
 ] as const;
 
 const JOB_SEED = [
-  { product: "Executive Desk – Walnut", qty: 17, due: "Aug 8", status: "In Progress", progress: 65 },
-  { product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
-  { product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned", progress: 0 },
-  { product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned", progress: 0 },
-  { product: "Ergonomic Chair – Black", qty: 12, due: "Aug 6", status: "Completed", progress: 100 },
-  { product: "Reception Desk – L-Shape", qty: 3, due: "Aug 14", status: "Planned", progress: 0 },
-  { product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed", progress: 100 },
+  { orderSeedId: "ORD-1042", customer: "Foothill Realty Partners", product: "Executive Desk – Walnut", qty: 5, due: "Aug 8", status: "In Progress", progress: 65 },
+  { orderSeedId: "ORD-1045", customer: "Harborline Logistics", product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
+  { orderSeedId: null, customer: "Internal Stock", product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned", progress: 0 },
+  { orderSeedId: "ORD-1044", customer: "Crestwood Architects", product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned", progress: 0 },
+  { orderSeedId: "ORD-1041", customer: "Meridian Dental Group", product: "Ergonomic Chair – Black", qty: 8, due: "Aug 6", status: "Completed", progress: 100 },
+  { orderSeedId: "ORD-1040", customer: "Union Square Café Co.", product: "Reception Desk – L-Shape", qty: 1, due: "Aug 14", status: "Planned", progress: 0 },
+  { orderSeedId: "ORD-1043", customer: "Bluepeak Coworking", product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed", progress: 100 },
 ] as const;
 
 async function main() {
@@ -139,6 +139,7 @@ async function main() {
   console.log(`[seed] created ${CUSTOMER_SEED.length} customers, ${SUPPLIER_SEED.length} suppliers, ${PRODUCT_SEED.length} products, ${INVENTORY_SEED.length} inventory items.`);
 
   const orderIdBySeedId = new Map<string, mongoose.Types.ObjectId>();
+  const orderNumberBySeedId = new Map<string, string>();
   for (const o of ORDER_SEED) {
     const order = await Order.create({
       number: await generateRecordNumber("order", new Date()),
@@ -148,6 +149,7 @@ async function main() {
       date: parseDate(o.date),
     });
     orderIdBySeedId.set(o.seedId, order._id);
+    orderNumberBySeedId.set(o.seedId, order.number);
   }
   console.log(`[seed] created ${ORDER_SEED.length} orders.`);
 
@@ -183,9 +185,15 @@ async function main() {
   console.log(`[seed] created ${SHIPMENT_SEED.length} shipments.`);
 
   for (const j of JOB_SEED) {
+    const orderNumber = j.orderSeedId ? orderNumberBySeedId.get(j.orderSeedId) : undefined;
     await ProductionJob.create({
       number: await generateRecordNumber("job", new Date()),
-      ...j,
+      orderNumber: orderNumber || undefined,
+      customer: j.customer,
+      product: j.product,
+      qty: j.qty,
+      status: j.status,
+      progress: j.progress,
       due: parseDate(j.due),
     });
   }

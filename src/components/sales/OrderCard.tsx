@@ -2,21 +2,21 @@ import type { Order, OrderStatus } from "@/domain/Order";
 import { Card } from "@/components/ui/Card";
 import { StatusTag, Tag } from "@/components/ui/Tag";
 import { StatusPalette } from "@/domain/StatusBadge";
+import { OrderStageTracker } from "./OrderStageTracker";
 
 interface OrderCardProps {
   order: Order;
-  /** Precomputed by the page (joins the order's line items against Production Jobs) — see OrderBoard.productionStatusFor. */
-  productionStatusWord: string;
   /** Set while this card has a drag-and-drop move awaiting Save/Undo (see sales/page.tsx) — shows the target status instead of the real one, and a dashed outline so it reads as unconfirmed. */
   pendingStatus?: OrderStatus;
+  showStages?: boolean;
   onDragStart: (e: React.DragEvent) => void;
   onClick?: () => void;
 }
 
 const VISIBLE_ITEMS = 2;
 
-/** OrderCard — one draggable Kanban card. Shows up to two line items, then "+N more item(s)", then a date/production-status/amount footer. */
-export function OrderCard({ order, productionStatusWord, pendingStatus, onDragStart, onClick }: OrderCardProps) {
+/** OrderCard — one draggable Kanban card. Shows up to two line items, then "+N more item(s)", date/amount, and optional 4-stage pipeline stepper. */
+export function OrderCard({ order, pendingStatus, showStages = true, onDragStart, onClick }: OrderCardProps) {
   const visible = order.lineItems.slice(0, VISIBLE_ITEMS);
   const extra = order.lineItems.length - visible.length;
 
@@ -49,11 +49,15 @@ export function OrderCard({ order, productionStatusWord, pendingStatus, onDragSt
       </div>
 
       <div className="text-[11px] text-[var(--color-neutral-500)] flex justify-between items-center pt-1 border-t border-[var(--color-divider)]">
-        <span>
-          {order.date} · {productionStatusWord}
-        </span>
+        <span>{order.date}</span>
         <span className="font-medium text-[var(--color-text)]">{order.amountFormatted}</span>
       </div>
+
+      {showStages && (
+        <div className="pt-1 border-t border-[var(--color-divider)]">
+          <OrderStageTracker status={pendingStatus ?? order.status} variant="compact" />
+        </div>
+      )}
     </Card>
   );
 }

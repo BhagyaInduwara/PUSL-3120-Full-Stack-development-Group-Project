@@ -56,10 +56,10 @@ interface OrderStageTrackerProps {
 /**
  * Calculates current progress across the 4 stages based on OrderStatus.
  * - Draft: Step 0 is active (unconfirmed)
- * - Confirmed: Step 0 done, Step 1 active
- * - Invoiced: Steps 0, 1 done, Step 2 done / Step 3 active
- * - Shipped: Steps 0, 1, 2 done, Step 3 active
- * - Closed: All steps 0, 1, 2, 3 completed
+ * - Confirmed: Step 0 done (Order Placed), Step 1 active (In Production)
+ * - Invoiced: Steps 0, 1, 2 done (Order, Production, Invoicing), Step 3 active (Ready to Ship)
+ * - Shipped: Steps 0, 1, 2 done, Step 3 active (In Transit)
+ * - Closed: All steps 0, 1, 2, 3 completed (Delivered)
  */
 export function getStageState(status: OrderStatus, stageIndex: number) {
   let completedThreshold = 0;
@@ -112,12 +112,19 @@ export function OrderStageTracker({
             const Icon = stage.icon;
             const isLast = idx === ORDER_STAGES.length - 1;
 
+            const activeLabel =
+              idx === 3
+                ? status === "Invoiced"
+                  ? "Ready to Ship"
+                  : "In Transit"
+                : "In Progress";
+
             return (
               <div key={stage.id} className="flex items-center flex-1 last:flex-initial">
                 {/* Stage Node */}
                 <div
                   className="group relative flex flex-col items-center"
-                  title={`${stage.name} (${isCompleted ? "Completed" : isActive ? "In Progress" : "Pending"})`}
+                  title={`${stage.name} (${isCompleted ? "Completed" : isActive ? activeLabel : "Pending"})`}
                 >
                   <div
                     className={`w-5 h-5 rounded-full flex items-center justify-center transition-all duration-200 text-[10px] ${
@@ -188,11 +195,11 @@ export function OrderStageTracker({
         </span>
         <span className="text-xs text-[var(--color-accent)] font-medium">
           {status === "Closed"
-            ? "4 of 4 Steps Complete"
+            ? "4 of 4 Steps Complete · Delivered"
             : status === "Shipped"
             ? "Stage 4 · In Transit"
             : status === "Invoiced"
-            ? "Stage 3 · Billed"
+            ? "3 of 4 Steps Complete · Ready to Ship"
             : status === "Confirmed"
             ? "Stage 2 · In Production"
             : "Stage 1 · Draft"}
@@ -203,6 +210,12 @@ export function OrderStageTracker({
         {ORDER_STAGES.map((stage, idx) => {
           const { isCompleted, isActive, isPending } = getStageState(status, idx);
           const Icon = stage.icon;
+          const activeLabel =
+            idx === 3
+              ? status === "Invoiced"
+                ? "Ready to Ship"
+                : "In Transit"
+              : "In Progress";
 
           return (
             <div
@@ -250,7 +263,7 @@ export function OrderStageTracker({
                   {isCompleted
                     ? "Completed"
                     : isActive
-                    ? "In Progress"
+                    ? activeLabel
                     : isPending
                     ? "Pending"
                     : stage.description}
