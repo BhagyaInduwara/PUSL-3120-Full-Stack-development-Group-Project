@@ -56,16 +56,38 @@ export function JobColumn({ label, status, jobs, variant, dim, pendingMove, onSe
               }`}
               onClick={() => onSelect(job)}
             >
-              <div className="text-[13px] font-semibold">{job.product}</div>
-              <div className="text-xs text-[var(--color-neutral-500)]">
-                Qty {job.qty} &middot; Due {job.due}
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-semibold text-[var(--color-neutral-400)]">{job.number}</span>
+                {job.orderNumber ? (
+                  <Tag variant="accent" className="text-[10px] px-1.5 py-0.5 font-medium">
+                    {job.orderNumber}
+                  </Tag>
+                ) : (
+                  <Tag variant="neutral" className="text-[10px] px-1.5 py-0.5">
+                    Stock
+                  </Tag>
+                )}
               </div>
+
+              <div>
+                <div className="text-[13px] font-semibold text-[var(--color-text)]">{job.product}</div>
+                {job.customer && (
+                  <div className="text-xs text-[var(--color-neutral-400)] mt-0.5 truncate">
+                    {job.customer}
+                  </div>
+                )}
+              </div>
+
+              <div className="text-xs text-[var(--color-neutral-500)] flex justify-between items-center pt-0.5 border-t border-[var(--color-divider)]">
+                <span>Qty {job.qty}</span>
+                <span>Due {job.due}</span>
+              </div>
+
               {effectiveStatus === "In Progress" && (
-                <div className="w-full h-[5px] rounded-full bg-[var(--color-neutral-800)] overflow-hidden">
+                <div className="w-full h-[5px] rounded-full bg-[var(--color-neutral-800)] overflow-hidden mt-0.5">
                   <div className="h-full bg-[var(--color-accent)]" style={{ width: `${job.progress}%` }} />
                 </div>
               )}
-              <div className="text-[11px] text-[var(--color-neutral-500)]">{job.number}</div>
             </Card>
           );
         })}

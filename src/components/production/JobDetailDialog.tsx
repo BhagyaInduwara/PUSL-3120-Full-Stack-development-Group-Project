@@ -21,11 +21,13 @@ interface JobDetailDialogProps {
 /** JobDetailDialog — popup opened from the Production Planning board. Editable only while the job is still Planned (ProductionJob.canEdit — its stand-in for "Draft", since jobs have no Draft status). */
 export function JobDetailDialog({ job, onClose, onSave }: JobDetailDialogProps) {
   const [product, setProduct] = useState(job.product);
+  const [customer, setCustomer] = useState(job.customer || "");
   const [qty, setQty] = useState(job.qty);
   const [due, setDue] = useState(job.due);
 
   const reset = () => {
     setProduct(job.product);
+    setCustomer(job.customer || "");
     setQty(job.qty);
     setDue(job.due);
   };
@@ -38,12 +40,14 @@ export function JobDetailDialog({ job, onClose, onSave }: JobDetailDialogProps) 
       editable={job.canEdit}
       onClose={onClose}
       onCancelEdit={reset}
-      onSave={() => onSave({ product, qty, due })}
+      onSave={() => onSave({ product, qty, due, customer })}
     >
       {(mode) =>
         mode === "view" ? (
           <>
             <RecordRow label="Product" value={job.product} />
+            <RecordRow label="Linked Order" value={job.orderNumber || "General Stock (Unlinked)"} />
+            {job.customer && <RecordRow label="Customer" value={job.customer} />}
             <RecordRow label="Quantity" value={job.qty} />
             <RecordRow label="Due" value={job.due} />
             {job.status === "In Progress" && <RecordRow label="Progress" value={`${job.progress}%`} />}
@@ -52,6 +56,9 @@ export function JobDetailDialog({ job, onClose, onSave }: JobDetailDialogProps) 
           <>
             <Field label="Product">
               <Input value={product} onChange={(e) => setProduct(e.target.value)} />
+            </Field>
+            <Field label="Customer / Destination">
+              <Input value={customer} onChange={(e) => setCustomer(e.target.value)} />
             </Field>
             <Field label="Quantity">
               <Input type="number" value={qty} onChange={(e) => setQty(Number(e.target.value) || 0)} />

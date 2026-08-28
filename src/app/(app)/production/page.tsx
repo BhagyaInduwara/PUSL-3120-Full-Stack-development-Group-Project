@@ -14,6 +14,8 @@ import { API_URL } from "@/lib/apiUrl";
 interface ApiProductionJob {
   _id: string;
   number: string;
+  orderNumber?: string;
+  customer?: string;
   product: string;
   qty: number;
   due: string;
@@ -21,15 +23,37 @@ interface ApiProductionJob {
   progress?: number;
 }
 
+interface ApiOrder {
+  _id: string;
+  number: string;
+  customer: string;
+  lineItems: { product: string; qty: number; price: number }[];
+  status: string;
+}
+
 function formatDue(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function toProductionJob(job: ApiProductionJob): ProductionJob {
+function toProductionJob(job: ApiProductionJob, orders: ApiOrder[] = []): ProductionJob {
+  let orderNumber = job.orderNumber;
+  let customer = job.customer;
+
+  // Fallback for pre-existing records in MongoDB that don't have orderNumber/customer set
+  if (!orderNumber) {
+    const matchingOrder = orders.find((o) => o.lineItems.some((li) => li.product === job.product));
+    if (matchingOrder) {
+      orderNumber = matchingOrder.number;
+      customer = customer || matchingOrder.customer;
+    }
+  }
+
   return new ProductionJob({
     id: job._id,
     number: job.number,
+    orderNumber,
+    customer,
     product: job.product,
     qty: job.qty,
     due: formatDue(job.due),
@@ -40,10 +64,21 @@ function toProductionJob(job: ApiProductionJob): ProductionJob {
 
 /** Pure fetch, no setState — kept separate so the initial-load effect can set state inline (the pattern its lint rule expects) while mutation handlers reuse the same fetch logic outside any effect. */
 async function fetchJobs(): Promise<ProductionJob[]> {
-  const response = await fetch(`${API_URL}/api/production-jobs`, { credentials: "include" });
-  if (!response.ok) return [];
-  const data = await response.json();
-  return (data.productionJobs as ApiProductionJob[]).map(toProductionJob);
+  try {
+    const [jobsRes, ordersRes] = await Promise.all([
+      fetch(`${API_URL}/api/production-jobs`, { credentials: "include" }),
+      fetch(`${API_URL}/api/orders`, { credentials: "include" }),
+    ]);
+
+    if (!jobsRes.ok) return [];
+    const data = await jobsRes.json();
+    const orders = ordersRes.ok ? ((await ordersRes.json()) as ApiOrder[]) : [];
+
+    return (data.productionJobs as ApiProductionJob[]).map((j) => toProductionJob(j, orders));
+  } catch (error) {
+    console.error("Error fetching jobs and orders:", error);
+    return [];
+  }
 }
 
 export default function ProductionPage() {
@@ -64,7 +99,7 @@ export default function ProductionPage() {
     })();
   }, []);
 
-  async function handleSaveJob(patch: Partial<{ product: string; qty: number; due: string }>) {
+  async function handleSaveJob(patch: Partial<{ product: string; qty: number; due: string; orderNumber?: string; customer?: string }>) {
     if (!selectedJob) return;
     try {
       await fetch(`${API_URL}/api/production-jobs/${selectedJob.id}`, {
@@ -77,6 +112,8 @@ export default function ProductionPage() {
           product: patch.product ?? selectedJob.product,
           qty: patch.qty ?? selectedJob.qty,
           due: patch.due ?? selectedJob.due,
+          orderNumber: patch.orderNumber ?? selectedJob.orderNumber,
+          customer: patch.customer ?? selectedJob.customer,
           status: selectedJob.status,
           progress: selectedJob.progress,
         }),
@@ -88,13 +125,19 @@ export default function ProductionPage() {
     }
   }
 
-  async function handleCreateJob(data: { product: string; qty: number; due: string }) {
+  async function handleCreateJob(data: { product: string; qty: number; due: string; orderNumber?: string; customer?: string }) {
     try {
       await fetch(`${API_URL}/api/production-jobs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ product: data.product, qty: data.qty, due: data.due }),
+        body: JSON.stringify({
+          product: data.product,
+          qty: data.qty,
+          due: data.due,
+          orderNumber: data.orderNumber,
+          customer: data.customer,
+        }),
       });
       setIsNewJobOpen(false);
       setJobs(await fetchJobs());
