@@ -103,6 +103,7 @@ export default function SalesPage() {
   const [jobs, setJobs] = useState<ProductionJob[]>([]);
   const [draft, setDraft] = useState<IncomingOrderDraft | null>(null);
   const [view, setView] = useState<View>("board");
+  const [showStages, setShowStages] = useState(true);
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
@@ -256,6 +257,23 @@ export default function SalesPage() {
         subtitle="Drag orders between stages as they progress."
         actions={
           <>
+            <button
+              type="button"
+              onClick={() => setShowStages((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium rounded-[var(--radius-md)] border transition-all cursor-pointer ${
+                showStages
+                  ? "bg-[color-mix(in_srgb,var(--color-accent)_15%,transparent)] border-[var(--color-accent)] text-[var(--color-accent)] shadow-[0_0_8px_rgba(var(--color-accent),0.15)]"
+                  : "bg-[var(--color-surface)] border-[var(--color-divider)] text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:border-[var(--color-neutral-600)]"
+              }`}
+              title={showStages ? "Hide 4-stage pipeline on cards" : "Show 4-stage pipeline on cards"}
+            >
+              <span
+                className={`w-2 h-2 rounded-full transition-colors ${
+                  showStages ? "bg-[var(--color-accent)]" : "bg-[var(--color-neutral-600)]"
+                }`}
+              />
+              Stages
+            </button>
             <SegmentedControl
               name="sview"
               value={view}
@@ -291,6 +309,7 @@ export default function SalesPage() {
             <OrderBoard
               orders={filtered}
               jobs={jobs}
+              showStages={showStages}
               pendingMove={pendingMove ? { orderId: pendingMove.orderId, status: pendingMove.toStatus } : null}
               onMove={handleMove}
               onSelect={setSelectedOrder}
