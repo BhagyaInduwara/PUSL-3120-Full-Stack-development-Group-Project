@@ -1,59 +1,54 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { API_URL } from "@/lib/apiUrl";
 
-const PRODUCTS = [
-  "ErgoDesk Pro",
-  "FlexiChair",
-  "Executive Table",
-  "Oak Storage Unit",
-  "Acoustic Divider",
-];
+interface ApiProduct {
+  name: string;
+}
 
-const SUPERVISORS = [
-  "Sarah Jenkins",
-  "Marcus Vance",
-  "Elena Rostova",
-  "David Kim",
-];
-
-const PRIORITIES = ["Normal", "High", "Rush"] as const;
-type Priority = (typeof PRIORITIES)[number];
+async function fetchProductNames(): Promise<string[]> {
+  const res = await fetch(`${API_URL}/api/products`, { credentials: "include" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.products as ApiProduct[]).map((p) => p.name);
+}
 
 interface NewJobModalProps {
   onClose: () => void;
-  onSubmit?: (data: {
-    product: string;
-    qty: number;
-    due: string;
-    priority: Priority;
-    supervisor: string;
-  }) => void;
+  onSubmit: (data: { product: string; qty: number; due: string }) => void;
 }
 
+/** NewJobModal — product list is fetched from the real catalog rather than hardcoded, so a scheduled job's product always matches a real Product/Order line item name. */
 export function NewJobModal({ onClose, onSubmit }: NewJobModalProps) {
-  const [product, setProduct] = useState(PRODUCTS[0]);
-  const [qty, setQty] = useState(50);
+  const [products, setProducts] = useState<string[]>([]);
+  const [product, setProduct] = useState("");
+  const [qty, setQty] = useState(1);
   const [due, setDue] = useState("");
-  const [priority, setPriority] = useState<Priority>("Normal");
-  const [supervisor, setSupervisor] = useState(SUPERVISORS[0]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    (async () => {
+      try {
+        const names = await fetchProductNames();
+        setProducts(names);
+        setProduct((prev) => prev || names[0] || "");
+      } catch (error) {
+        console.error("Error fetching products:", error);
+      }
+    })();
+  }, []);
+
+  const canSubmit = product.length > 0 && qty > 0 && due.length > 0;
+
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (onSubmit) {
-      onSubmit({ product, qty, due, priority, supervisor });
-    }
-    onClose();
-  };
-
-  const selectStyle =
-    "w-full min-h-9 px-2.5 py-1.5 text-sm text-[var(--color-text)] bg-[var(--color-surface)] " +
-    "border border-[var(--color-divider)] rounded-[var(--radius-md)] outline-none " +
-    "hover:border-[color-mix(in_srgb,var(--color-text)_45%,transparent)] " +
-    "focus-visible:border-[var(--color-accent)] cursor-pointer";
+    if (!canSubmit) return;
+    onSubmit({ product, qty, due });
+  }
 
   return (
     <Dialog
@@ -64,28 +59,25 @@ export function NewJobModal({ onClose, onSubmit }: NewJobModalProps) {
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleSubmit}>
+          <Button variant="primary" onClick={handleSubmit} disabled={!canSubmit}>
             Schedule Job
           </Button>
         </>
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <Field label="Product Selection">
-          <select
-            value={product}
-            onChange={(e) => setProduct(e.target.value)}
-            className={selectStyle}
-          >
-            {PRODUCTS.map((item) => (
-              <option key={item} value={item} className="bg-[var(--color-surface)] text-[var(--color-text)]">
-                {item}
+        <Field label="Product">
+          <Select value={product} onChange={(e) => setProduct(e.target.value)}>
+            {products.length === 0 && <option value="">No products available</option>}
+            {products.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
-        <Field label="Batch Quantity">
+        <Field label="Batch quantity">
           <Input
             type="number"
             min={1}
@@ -95,52 +87,8 @@ export function NewJobModal({ onClose, onSubmit }: NewJobModalProps) {
           />
         </Field>
 
-        <Field label="Due Date">
-          <Input
-            type="date"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-          />
-        </Field>
-
-        <Field label="Priority Level">
-          <div className="flex gap-2 pt-0.5">
-            {PRIORITIES.map((p) => {
-              const isActive = priority === p;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPriority(p)}
-                  className={`flex-1 py-1.5 px-3 rounded-[var(--radius-md)] text-xs font-medium border transition-colors cursor-pointer ${
-                    isActive
-                      ? p === "Rush"
-                        ? "bg-[color-mix(in_srgb,var(--color-accent)_20%,transparent)] border-[var(--color-accent)] text-[var(--color-accent)]"
-                        : p === "High"
-                        ? "bg-[color-mix(in_srgb,var(--color-warning,orange)_20%,transparent)] border-[color-mix(in_srgb,var(--color-warning,orange)_80%,transparent)] text-[var(--color-text)]"
-                        : "bg-[color-mix(in_srgb,var(--color-text)_15%,transparent)] border-[var(--color-text)] text-[var(--color-text)]"
-                      : "border-[var(--color-divider)] text-[color-mix(in_srgb,var(--color-text)_60%,transparent)] hover:border-[color-mix(in_srgb,var(--color-text)_35%,transparent)]"
-                  }`}
-                >
-                  {p}
-                </button>
-              );
-            })}
-          </div>
-        </Field>
-
-        <Field label="Assigned Supervisor">
-          <select
-            value={supervisor}
-            onChange={(e) => setSupervisor(e.target.value)}
-            className={selectStyle}
-          >
-            {SUPERVISORS.map((sup) => (
-              <option key={sup} value={sup} className="bg-[var(--color-surface)] text-[var(--color-text)]">
-                {sup}
-              </option>
-            ))}
-          </select>
+        <Field label="Due date">
+          <Input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </Field>
       </form>
     </Dialog>

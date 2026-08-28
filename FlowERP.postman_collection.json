@@ -1,0 +1,459 @@
+{
+  "info": {
+    "name": "FlowERP API",
+    "description": "REST API collection for FlowERP's Express + MongoDB backend. Auth uses a signed JWT stored in an httpOnly cookie — Postman's cookie jar picks it up automatically after the Login request runs, so no manual token handling is needed. Just run \"Auth > Login\" once per session before the other requests. See API_CONTRACT.md in the repo root for the full written contract this collection mirrors.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000/api", "type": "string" },
+    { "key": "customerId", "value": "", "type": "string" },
+    { "key": "productId", "value": "", "type": "string" },
+    { "key": "supplierId", "value": "", "type": "string" },
+    { "key": "orderId", "value": "", "type": "string" },
+    { "key": "orderDraftId", "value": "", "type": "string" },
+    { "key": "invoiceId", "value": "", "type": "string" },
+    { "key": "shipmentId", "value": "", "type": "string" },
+    { "key": "inventoryItemId", "value": "", "type": "string" },
+    { "key": "productionJobId", "value": "", "type": "string" },
+    { "key": "userId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"newstaff\",\n  \"password\": \"password123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "description": "Public self-service registration. New accounts default to the \"staff\" role."
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin@123\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "description": "Sets the session cookie in Postman's cookie jar. Run this first."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+          }
+        },
+        {
+          "name": "Get current user (me)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
+          }
+        },
+        {
+          "name": "Create user (admin only)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"manager\",\n  \"password\": \"password123\",\n  \"role\": \"admin\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
+          }
+        },
+        {
+          "name": "Update user",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"manager\",\n  \"role\": \"staff\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] },
+            "description": "Optional username/role/password. Password only re-hashed if a non-empty value is sent."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "List customers",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/customers", "host": ["{{baseUrl}}"], "path": ["customers"] } }
+        },
+        {
+          "name": "Get customer by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/customers/{{customerId}}", "host": ["{{baseUrl}}"], "path": ["customers", "{{customerId}}"] } }
+        },
+        {
+          "name": "Create customer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"BluePeak Logistics\",\n  \"contact\": \"Sarah Jenkins\",\n  \"email\": \"sarah@bluepeak.com\",\n  \"city\": \"Chicago\"\n}" },
+            "url": { "raw": "{{baseUrl}}/customers", "host": ["{{baseUrl}}"], "path": ["customers"] }
+          }
+        },
+        {
+          "name": "Update customer",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"city\": \"Boston\"\n}" },
+            "url": { "raw": "{{baseUrl}}/customers/{{customerId}}", "host": ["{{baseUrl}}"], "path": ["customers", "{{customerId}}"] }
+          }
+        },
+        {
+          "name": "Delete customer",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/customers/{{customerId}}", "host": ["{{baseUrl}}"], "path": ["customers", "{{customerId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List products",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] } }
+        },
+        {
+          "name": "Get product by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] } }
+        },
+        {
+          "name": "Create product",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"sku\": \"PROD-099\",\n  \"name\": \"Precision Hydraulic Pump\",\n  \"category\": \"Machinery Parts\",\n  \"price\": 1450.00\n}" },
+            "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] }
+          }
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"price\": 1500.00\n}" },
+            "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] }
+          }
+        },
+        {
+          "name": "Delete product",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Suppliers",
+      "item": [
+        {
+          "name": "List suppliers",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/suppliers", "host": ["{{baseUrl}}"], "path": ["suppliers"] } }
+        },
+        {
+          "name": "Get supplier by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/suppliers/{{supplierId}}", "host": ["{{baseUrl}}"], "path": ["suppliers", "{{supplierId}}"] } }
+        },
+        {
+          "name": "Create supplier",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Vortex Steels Ltd\",\n  \"category\": \"Raw Metals\",\n  \"contact\": \"orders@vortexsteels.com\",\n  \"leadTime\": \"7 days\"\n}" },
+            "url": { "raw": "{{baseUrl}}/suppliers", "host": ["{{baseUrl}}"], "path": ["suppliers"] }
+          }
+        },
+        {
+          "name": "Update supplier",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"leadTime\": \"5 days\"\n}" },
+            "url": { "raw": "{{baseUrl}}/suppliers/{{supplierId}}", "host": ["{{baseUrl}}"], "path": ["suppliers", "{{supplierId}}"] }
+          }
+        },
+        {
+          "name": "Delete supplier",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/suppliers/{{supplierId}}", "host": ["{{baseUrl}}"], "path": ["suppliers", "{{supplierId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "List orders",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] } },
+          "response": []
+        },
+        {
+          "name": "Get order by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        },
+        {
+          "name": "Create order",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer\": \"BluePeak Logistics\",\n  \"lineItems\": [\n    { \"product\": \"Precision Hydraulic Pump\", \"qty\": 5, \"price\": 1450.00 },\n    { \"product\": \"Steel Bracket Set\", \"qty\": 20, \"price\": 12.50 }\n  ],\n  \"date\": \"2026-08-27T00:00:00.000Z\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] },
+            "description": "lineItems must have at least one entry. amount is a computed virtual, not sent."
+          }
+        },
+        {
+          "name": "Update order (full record)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer\": \"BluePeak Logistics\",\n  \"lineItems\": [\n    { \"product\": \"Precision Hydraulic Pump\", \"qty\": 8, \"price\": 1450.00 }\n  ],\n  \"status\": \"Confirmed\",\n  \"date\": \"2026-08-27T00:00:00.000Z\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] }
+          }
+        },
+        {
+          "name": "Move order status (Kanban drag)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Confirmed\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders/{{orderId}}/status", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}", "status"] },
+            "description": "status must be one of: Draft, Confirmed, Invoiced, Shipped, Closed."
+          }
+        },
+        {
+          "name": "Delete order",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Order Drafts",
+      "item": [
+        {
+          "name": "List order drafts",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/order-drafts", "host": ["{{baseUrl}}"], "path": ["order-drafts"] } }
+        },
+        {
+          "name": "Get order draft by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/order-drafts/{{orderDraftId}}", "host": ["{{baseUrl}}"], "path": ["order-drafts", "{{orderDraftId}}"] } }
+        },
+        {
+          "name": "Create order draft",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer\": \"Northgate Manufacturing\",\n  \"emailSubject\": \"RE: Q3 parts order\",\n  \"lineItems\": [\n    { \"product\": \"Precision Hydraulic Pump\", \"qty\": 3, \"price\": 1450.00 }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/order-drafts", "host": ["{{baseUrl}}"], "path": ["order-drafts"] }
+          }
+        },
+        {
+          "name": "Update order draft",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customer\": \"Northgate Manufacturing\",\n  \"emailSubject\": \"RE: Q3 parts order\",\n  \"lineItems\": [\n    { \"product\": \"Precision Hydraulic Pump\", \"qty\": 4, \"price\": 1450.00 }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/order-drafts/{{orderDraftId}}", "host": ["{{baseUrl}}"], "path": ["order-drafts", "{{orderDraftId}}"] }
+          }
+        },
+        {
+          "name": "Approve draft (creates a real Order)",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/order-drafts/{{orderDraftId}}/approve", "host": ["{{baseUrl}}"], "path": ["order-drafts", "{{orderDraftId}}", "approve"] },
+            "description": "Converts every line item on the draft into a real Order (status: Confirmed), deletes the draft, returns the new order."
+          }
+        },
+        {
+          "name": "Discard draft",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/order-drafts/{{orderDraftId}}", "host": ["{{baseUrl}}"], "path": ["order-drafts", "{{orderDraftId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Invoices",
+      "item": [
+        {
+          "name": "List invoices",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] } },
+          "description": "Populates orderId, embedding the full order under an \"order\" key."
+        },
+        {
+          "name": "Get invoice by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}"] } }
+        },
+        {
+          "name": "Create invoice",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"status\": \"Draft\",\n  \"issueDate\": \"2026-08-27T00:00:00.000Z\",\n  \"dueDate\": \"2026-09-10T00:00:00.000Z\"\n}" },
+            "url": { "raw": "{{baseUrl}}/invoices", "host": ["{{baseUrl}}"], "path": ["invoices"] }
+          }
+        },
+        {
+          "name": "Update invoice",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Sent\"\n}" },
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}"] }
+          }
+        },
+        {
+          "name": "Mark invoice paid",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}/mark-paid", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}", "mark-paid"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shipments",
+      "item": [
+        {
+          "name": "List shipments",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/shipments", "host": ["{{baseUrl}}"], "path": ["shipments"] } },
+          "description": "Populates orderId, embedding the full order under an \"order\" key."
+        },
+        {
+          "name": "Get shipment by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/shipments/{{shipmentId}}", "host": ["{{baseUrl}}"], "path": ["shipments", "{{shipmentId}}"] } }
+        },
+        {
+          "name": "Create shipment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"invoiceId\": \"{{invoiceId}}\",\n  \"status\": \"Draft\",\n  \"date\": \"2026-08-27T00:00:00.000Z\"\n}" },
+            "url": { "raw": "{{baseUrl}}/shipments", "host": ["{{baseUrl}}"], "path": ["shipments"] }
+          }
+        },
+        {
+          "name": "Update shipment",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Packed\"\n}" },
+            "url": { "raw": "{{baseUrl}}/shipments/{{shipmentId}}", "host": ["{{baseUrl}}"], "path": ["shipments", "{{shipmentId}}"] }
+          }
+        },
+        {
+          "name": "Dispatch shipment",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{baseUrl}}/shipments/{{shipmentId}}/dispatch", "host": ["{{baseUrl}}"], "path": ["shipments", "{{shipmentId}}", "dispatch"] }
+          }
+        },
+        {
+          "name": "Deliver shipment",
+          "request": {
+            "method": "PATCH",
+            "url": { "raw": "{{baseUrl}}/shipments/{{shipmentId}}/deliver", "host": ["{{baseUrl}}"], "path": ["shipments", "{{shipmentId}}", "deliver"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "List inventory",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/inventory", "host": ["{{baseUrl}}"], "path": ["inventory"] } }
+        },
+        {
+          "name": "Get inventory item by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/inventory/{{inventoryItemId}}", "host": ["{{baseUrl}}"], "path": ["inventory", "{{inventoryItemId}}"] } }
+        },
+        {
+          "name": "Create inventory item",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"sku\": \"PROD-099\",\n  \"name\": \"Precision Hydraulic Pump\",\n  \"category\": \"Machinery Parts\",\n  \"qty\": 120,\n  \"reorderPoint\": 30\n}" },
+            "url": { "raw": "{{baseUrl}}/inventory", "host": ["{{baseUrl}}"], "path": ["inventory"] }
+          }
+        },
+        {
+          "name": "Update inventory item",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"qty\": 95\n}" },
+            "url": { "raw": "{{baseUrl}}/inventory/{{inventoryItemId}}", "host": ["{{baseUrl}}"], "path": ["inventory", "{{inventoryItemId}}"] }
+          }
+        },
+        {
+          "name": "Delete inventory item",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/inventory/{{inventoryItemId}}", "host": ["{{baseUrl}}"], "path": ["inventory", "{{inventoryItemId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "Production Jobs",
+      "item": [
+        {
+          "name": "List production jobs",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/production-jobs", "host": ["{{baseUrl}}"], "path": ["production-jobs"] } }
+        },
+        {
+          "name": "Get production job by id",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/production-jobs/{{productionJobId}}", "host": ["{{baseUrl}}"], "path": ["production-jobs", "{{productionJobId}}"] } }
+        },
+        {
+          "name": "Create production job",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"product\": \"Precision Hydraulic Pump\",\n  \"qty\": 50,\n  \"due\": \"2026-09-15T00:00:00.000Z\"\n}" },
+            "url": { "raw": "{{baseUrl}}/production-jobs", "host": ["{{baseUrl}}"], "path": ["production-jobs"] }
+          }
+        },
+        {
+          "name": "Update production job (full record)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"product\": \"Precision Hydraulic Pump\",\n  \"qty\": 50,\n  \"due\": \"2026-09-15T00:00:00.000Z\",\n  \"status\": \"In Progress\",\n  \"progress\": 40\n}" },
+            "url": { "raw": "{{baseUrl}}/production-jobs/{{productionJobId}}", "host": ["{{baseUrl}}"], "path": ["production-jobs", "{{productionJobId}}"] }
+          }
+        },
+        {
+          "name": "Move production job status (Kanban drag)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Completed\",\n  \"progress\": 100\n}" },
+            "url": { "raw": "{{baseUrl}}/production-jobs/{{productionJobId}}/status", "host": ["{{baseUrl}}"], "path": ["production-jobs", "{{productionJobId}}", "status"] }
+          }
+        }
+      ]
+    }
+  ]
+}

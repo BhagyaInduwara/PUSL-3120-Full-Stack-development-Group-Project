@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { InvoiceTable } from "@/components/invoicing/InvoiceTable";
 import { InvoiceDetailDialog } from "@/components/invoicing/InvoiceDetailDialog";
+import { NewInvoiceDialog, type NewInvoiceData } from "@/components/invoicing/NewInvoiceDialog";
 import { Invoice, type InvoiceEditableFields, type InvoiceStatus } from "@/domain/Invoice";
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 
@@ -73,6 +74,8 @@ export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [orderById, setOrderById] = useState<Map<string, Order>>(new Map());
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [newInvoiceOpen, setNewInvoiceOpen] = useState(false);
+  const [newInvoiceError, setNewInvoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -104,6 +107,30 @@ export default function InvoicingPage() {
     }
   }
 
+  async function handleCreateInvoice(data: NewInvoiceData) {
+    setNewInvoiceError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/invoices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setNewInvoiceError(body.error ?? "Couldn't create the invoice.");
+        return;
+      }
+      setNewInvoiceOpen(false);
+      const { invoices, orderById } = await fetchInvoices();
+      setInvoices(invoices);
+      setOrderById(orderById);
+    } catch (error) {
+      console.error("Error creating invoice:", error);
+      setNewInvoiceError("Couldn't reach the server. Please try again.");
+    }
+  }
+
   async function handleMarkPaid() {
     if (!selectedInvoice) return;
     try {
@@ -125,7 +152,11 @@ export default function InvoicingPage() {
       <PageHeader
         title="Invoicing"
         subtitle="Track billing status across every order."
-        actions={<Button variant="primary">New Invoice</Button>}
+        actions={
+          <Button variant="primary" onClick={() => setNewInvoiceOpen(true)}>
+            New Invoice
+          </Button>
+        }
       />
       <div className="flex-1 overflow-auto px-8 pt-6 pb-10">
         <InvoiceTable invoices={invoices} orderById={orderById} onSelect={setSelectedInvoice} />
@@ -138,6 +169,17 @@ export default function InvoicingPage() {
           onClose={() => setSelectedInvoice(null)}
           onSave={handleSave}
           onMarkPaid={handleMarkPaid}
+        />
+      )}
+
+      {newInvoiceOpen && (
+        <NewInvoiceDialog
+          error={newInvoiceError}
+          onClose={() => {
+            setNewInvoiceOpen(false);
+            setNewInvoiceError(null);
+          }}
+          onSubmit={handleCreateInvoice}
         />
       )}
     </>
