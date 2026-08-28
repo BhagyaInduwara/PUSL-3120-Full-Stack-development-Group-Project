@@ -99,7 +99,7 @@ export default function ProductionPage() {
     })();
   }, []);
 
-  async function handleSaveJob(patch: Partial<{ product: string; qty: number; due: string; orderNumber?: string; customer?: string }>) {
+  async function handleSaveJob(patch: Partial<{ product: string; qty: number; due: string; orderNumber?: string; customer?: string; progress?: number }>) {
     if (!selectedJob) return;
     try {
       await fetch(`${API_URL}/api/production-jobs/${selectedJob.id}`, {
@@ -115,7 +115,7 @@ export default function ProductionPage() {
           orderNumber: patch.orderNumber ?? selectedJob.orderNumber,
           customer: patch.customer ?? selectedJob.customer,
           status: selectedJob.status,
-          progress: selectedJob.progress,
+          progress: patch.progress ?? selectedJob.progress,
         }),
       });
       setSelectedJob(null);

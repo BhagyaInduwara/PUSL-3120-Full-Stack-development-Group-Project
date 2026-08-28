@@ -22,6 +22,8 @@ export interface ProductionJobEditableFields {
   due: string;
   orderNumber?: string;
   customer?: string;
+  /** 0-100. Only editable while status is "In Progress". */
+  progress?: number;
 }
 
 export class ProductionJob extends Entity {
@@ -65,6 +67,11 @@ export class ProductionJob extends Entity {
   /** ProductionJob has no "Draft" status; "Planned" is its equivalent not-yet-started state, so that's when its scope can still change. */
   get canEdit(): boolean {
     return this.status === "Planned";
+  }
+
+  /** In Progress jobs can only update their completion percentage. */
+  get canEditProgress(): boolean {
+    return this.status === "In Progress";
   }
 
   update(patch: Partial<ProductionJobEditableFields>): void {
