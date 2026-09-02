@@ -4,7 +4,6 @@
  * file that should change when swapping in a real database: repositories
  * read from here today, and from your API/DB client once it's wired up.
  */
-import type { OrderProps } from "@/domain/Order";
 import type { InvoiceProps } from "@/domain/Invoice";
 import type { ShipmentProps } from "@/domain/Shipment";
 import type { ProductionJobProps } from "@/domain/ProductionJob";
@@ -12,30 +11,12 @@ import type { InventoryItemProps } from "@/domain/InventoryItem";
 import type { CustomerProps } from "@/domain/Customer";
 import type { SupplierProps } from "@/domain/Supplier";
 import type { ProductProps } from "@/domain/Product";
-import type { IncomingOrderDraftProps } from "@/domain/IncomingOrderDraft";
 
-export const ORDER_SEED: OrderProps[] = [
-  { id: "ORD-1036", number: "ORD-1036", customer: "Bluepeak Coworking", lineItems: [{ product: "Task Chair – Mesh Back", qty: 24, price: 145 }], status: "Closed", date: "Jul 18" },
-  { id: "ORD-1038", number: "ORD-1038", customer: "Crestwood Architects", lineItems: [{ product: "Conference Table – 8ft", qty: 2, price: 1240 }], status: "Shipped", date: "Jul 25" },
-  { id: "ORD-1039", number: "ORD-1039", customer: "Harborline Logistics", lineItems: [{ product: "Filing Cabinet – 2 Drawer", qty: 15, price: 210 }], status: "Shipped", date: "Jul 28" },
-  { id: "ORD-1040", number: "ORD-1040", customer: "Union Square Café Co.", lineItems: [{ product: "Reception Desk – L-Shape", qty: 1, price: 980 }], status: "Invoiced", date: "Jul 30" },
-  { id: "ORD-1041", number: "ORD-1041", customer: "Meridian Dental Group", lineItems: [{ product: "Ergonomic Chair – Black", qty: 8, price: 210 }], status: "Invoiced", date: "Aug 1" },
-  { id: "ORD-1042", number: "ORD-1042", customer: "Foothill Realty Partners", lineItems: [{ product: "Executive Desk – Walnut", qty: 5, price: 890 }], status: "Confirmed", date: "Aug 3" },
-  { id: "ORD-1043", number: "ORD-1043", customer: "Bluepeak Coworking", lineItems: [{ product: "3-Shelf Bookcase – Oak", qty: 10, price: 175 }], status: "Confirmed", date: "Aug 4" },
-  { id: "ORD-1044", number: "ORD-1044", customer: "Crestwood Architects", lineItems: [{ product: "Storage Locker – Steel", qty: 20, price: 130 }], status: "Confirmed", date: "Aug 5" },
-  { id: "ORD-1045", number: "ORD-1045", customer: "Harborline Logistics", lineItems: [{ product: "Task Chair – Mesh Back", qty: 30, price: 145 }], status: "Draft", date: "Aug 6" },
-  { id: "ORD-1046", number: "ORD-1046", customer: "Meridian Dental Group", lineItems: [{ product: "Reception Desk – L-Shape", qty: 2, price: 980 }], status: "Draft", date: "Aug 6" },
-];
-
-export const INCOMING_DRAFT_SEED: IncomingOrderDraftProps = {
-  id: "ORD-1047",
-  customer: "Foothill Realty Partners",
-  emailSubject: "Re: Office refresh — need quote for 12 desks",
-  lineItems: [
-    { product: "Executive Desk – Walnut", qty: 12, price: 890 },
-    { product: "Ergonomic Chair – Black", qty: 12, price: 210 },
-  ],
-};
+// Orders and incoming order drafts no longer have mock seed data here — the
+// Sales & Orders screen (src/app/(app)/sales/page.tsx) reads and writes them
+// directly against the real backend (/api/orders, /api/order-drafts) instead
+// of an in-memory repository. See OrderRepository's removal in this same
+// change for the rest of that retirement.
 
 export const INVOICE_SEED: InvoiceProps[] = [
   { id: "INV-2039", number: "INV-2039", orderId: "ORD-1036", status: "Paid", issueDate: "Jul 19", dueDate: "Aug 2" },
