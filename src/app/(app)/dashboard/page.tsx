@@ -9,7 +9,8 @@ import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesByCategoryCard, type CategorySalesItem } from "@/components/dashboard/SalesByCategoryCard";
 import { TopProductsCard, type TopProductItem } from "@/components/dashboard/TopProductsCard";
 import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
-import { ACTIVITY_FEED_SEED, REVENUE_SERIES_SEED } from "@/repositories/seed-data";
+import type { RevenuePoint } from "@/components/dashboard/RevenueChart";
+import type { ActivityItem } from "@/components/dashboard/ActivityFeed";
 import { PendingOrdersIcon, ProductionIcon, ShipmentIcon, LowStockIcon } from "@/components/icons";
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
@@ -62,6 +63,24 @@ interface ApiProduct {
   category: string;
 }
 
+interface ApiActivity {
+  _id: string;
+  message: string;
+  occurredAt: string;
+}
+
+interface ApiRevenuePoint {
+  week: string;
+  revenue: number;
+  orders: number;
+}
+
+function formatActivityTime(dateStr: string): string {
+  if (!dateStr) return "Recently";
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? "Recently" : d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 function toOrder(o: ApiOrder): Order {
   return new Order({
     id: o._id,
@@ -91,17 +110,29 @@ interface DashboardData {
   shipments: ApiShipment[];
   inventory: InventoryItem[];
   products: ApiProduct[];
+  activities: ActivityItem[];
+  revenueSeries: RevenuePoint[];
 }
 
-const EMPTY_DATA: DashboardData = { orders: [], jobs: [], shipments: [], inventory: [], products: [] };
+const EMPTY_DATA: DashboardData = {
+  orders: [],
+  jobs: [],
+  shipments: [],
+  inventory: [],
+  products: [],
+  activities: [],
+  revenueSeries: [],
+};
 
 async function fetchDashboardData(): Promise<DashboardData> {
-  const [ordersRes, jobsRes, shipmentsRes, inventoryRes, productsRes] = await Promise.all([
+  const [ordersRes, jobsRes, shipmentsRes, inventoryRes, productsRes, activityRes, revenueRes] = await Promise.all([
     fetch(`${API_URL}/api/orders`, { credentials: "include" }),
     fetch(`${API_URL}/api/production-jobs`, { credentials: "include" }),
     fetch(`${API_URL}/api/shipments`, { credentials: "include" }),
     fetch(`${API_URL}/api/inventory`, { credentials: "include" }),
     fetch(`${API_URL}/api/products`, { credentials: "include" }),
+    fetch(`${API_URL}/api/activity`, { credentials: "include" }),
+    fetch(`${API_URL}/api/revenue-series`, { credentials: "include" }),
   ]);
 
   const orders = ordersRes.ok ? ((await ordersRes.json()) as ApiOrder[]).map(toOrder) : [];
@@ -111,7 +142,20 @@ async function fetchDashboardData(): Promise<DashboardData> {
   const inventory = apiInventory.map((i) => new InventoryItem(i));
   const products = productsRes.ok ? ((await productsRes.json()).products as ApiProduct[]) : [];
 
-  return { orders, jobs, shipments, inventory, products };
+  const rawActivities = activityRes.ok ? (((await activityRes.json()).activities ?? []) as ApiActivity[]) : [];
+  const activities: ActivityItem[] = rawActivities.map((a) => ({
+    text: a.message,
+    time: formatActivityTime(a.occurredAt),
+  }));
+
+  const rawRevenue = revenueRes.ok ? (((await revenueRes.json()).revenueSeries ?? []) as ApiRevenuePoint[]) : [];
+  const revenueSeries: RevenuePoint[] = rawRevenue.map((r) => ({
+    week: r.week,
+    revenue: r.revenue,
+    orders: r.orders,
+  }));
+
+  return { orders, jobs, shipments, inventory, products, activities, revenueSeries };
 }
 
 const today = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -129,7 +173,7 @@ export default function DashboardPage() {
     })();
   }, []);
 
-  const { orders, jobs, shipments, inventory, products } = data;
+  const { orders, jobs, shipments, inventory, products, activities, revenueSeries } = data;
 
   const pendingOrdersCount = orders.filter((o) => o.status === "Draft" || o.status === "Confirmed").length;
   const inProductionCount = jobs.filter((j) => j.status === "Planned" || j.status === "In Progress").length;
@@ -225,7 +269,7 @@ export default function DashboardPage() {
                 </div>
                 <span className="text-[11px] text-[var(--color-neutral-500)]">Last 8 weeks</span>
               </div>
-              <RevenueChart series={REVENUE_SERIES_SEED} />
+              <RevenueChart series={revenueSeries} />
               <div className="flex gap-6 text-xs text-[var(--color-neutral-400)] pt-2 border-t border-[var(--color-divider)]">
                 <span className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-sm bg-[var(--color-accent-800)] inline-block" />
@@ -245,7 +289,7 @@ export default function DashboardPage() {
             <TopProductsCard products={topProducts} limit={5} />
 
             <Card elevation="sm" className="gap-0.5 p-6">
-              <ActivityFeed items={ACTIVITY_FEED_SEED} />
+              <ActivityFeed items={activities} />
             </Card>
           </div>
         </div>
