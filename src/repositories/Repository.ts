@@ -5,10 +5,12 @@ import type { Entity } from "@/domain/Entity";
  * regardless of what's behind it. Today `InMemoryRepository` backs it with
  * a plain array; swapping to your real DB/API later means writing one new
  * class per repository that implements this same interface (e.g.
- * `SqlOrderRepository implements OrderRepository`) — nothing above the
- * repository layer (ERPStore, components) has to change. This is the
+ * `SqlCustomerRepository implements Repository<Customer>`) — nothing above
+ * the repository layer (ERPStore, components) has to change. This is the
  * Dependency Inversion half of SOLID: ERPStore depends on this interface,
- * never on a concrete storage mechanism.
+ * never on a concrete storage mechanism. Order already made this swap for
+ * real (see src/app/(app)/sales/page.tsx) — its repository was retired
+ * rather than reimplemented, since the page talks to the backend directly.
  */
 export interface Repository<T extends Entity> {
   findAll(): T[];
