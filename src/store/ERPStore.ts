@@ -1,7 +1,6 @@
 import { Observable } from "./Observable";
 import {
   InvoiceRepository,
-  ShipmentRepository,
   ProductionJobRepository,
   InventoryRepository,
   CustomerRepository,
@@ -10,7 +9,6 @@ import {
 } from "@/repositories";
 import { ACTIVITY_FEED_SEED, REVENUE_SERIES_SEED } from "@/repositories/seed-data";
 import type { Invoice, InvoiceEditableFields } from "@/domain/Invoice";
-import type { Shipment, ShipmentEditableFields } from "@/domain/Shipment";
 import type { ProductionJob, JobStatus, ProductionJobEditableFields } from "@/domain/ProductionJob";
 import type { Customer, CustomerProps } from "@/domain/Customer";
 
@@ -30,18 +28,15 @@ import type { Customer, CustomerProps } from "@/domain/Customer";
  */
 export class ERPStore extends Observable {
   private readonly invoiceRepo = new InvoiceRepository();
-  private readonly shipmentRepo = new ShipmentRepository();
   private readonly jobRepo = new ProductionJobRepository();
   private readonly inventoryRepo = new InventoryRepository();
   private readonly customerRepo = new CustomerRepository();
   private readonly supplierRepo = new SupplierRepository();
   private readonly productRepo = new ProductRepository();
 
-  // Orders and incoming order drafts are no longer mock/in-memory data — see
-  // src/app/(app)/sales/page.tsx, which reads and writes them directly
-  // against the real backend (/api/orders, /api/order-drafts). Invoice's
-  // and Shipment's own order joins below were removed for the same reason:
-  // they depended on the retired OrderRepository.
+  // Orders, incoming drafts, and shipments are no longer mock/in-memory data —
+  // see sales/page.tsx and shipments/page.tsx, which read and write them
+  // directly against the real backend (/api/orders, /api/shipments).
 
   // -------------------------------------------------------------- Invoices
   get invoices(): Invoice[] {
@@ -65,20 +60,6 @@ export class ERPStore extends Observable {
   // ------------------------------------------------------------- Inventory
   get inventory() {
     return this.inventoryRepo.findAll();
-  }
-
-  // ------------------------------------------------------------- Shipments
-  get shipments(): Shipment[] {
-    return this.shipmentRepo.findAll();
-  }
-
-  findShipment(id: string): Shipment | undefined {
-    return this.shipmentRepo.findById(id);
-  }
-
-  updateShipment(id: string, patch: Partial<ShipmentEditableFields>): void {
-    this.shipmentRepo.findById(id)?.update(patch);
-    this.notify();
   }
 
   // ------------------------------------------------------------ Production
@@ -134,11 +115,6 @@ export class ERPStore extends Observable {
   /** Jobs planned or in progress. */
   get inProductionCount(): number {
     return this.jobs.filter((j) => j.status === "Planned" || j.status === "In Progress").length;
-  }
-
-  /** Shipments packed or dispatched — scheduled for dispatch. */
-  get shipmentsTodayCount(): number {
-    return this.shipments.filter((s) => s.status === "Packed" || s.status === "Dispatched").length;
   }
 
   get lowStockCount(): number {

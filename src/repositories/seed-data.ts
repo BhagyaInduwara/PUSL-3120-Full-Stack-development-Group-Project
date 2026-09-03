@@ -5,18 +5,16 @@
  * read from here today, and from your API/DB client once it's wired up.
  */
 import type { InvoiceProps } from "@/domain/Invoice";
-import type { ShipmentProps } from "@/domain/Shipment";
 import type { ProductionJobProps } from "@/domain/ProductionJob";
 import type { InventoryItemProps } from "@/domain/InventoryItem";
 import type { CustomerProps } from "@/domain/Customer";
 import type { SupplierProps } from "@/domain/Supplier";
 import type { ProductProps } from "@/domain/Product";
 
-// Orders and incoming order drafts no longer have mock seed data here — the
-// Sales & Orders screen (src/app/(app)/sales/page.tsx) reads and writes them
-// directly against the real backend (/api/orders, /api/order-drafts) instead
-// of an in-memory repository. See OrderRepository's removal in this same
-// change for the rest of that retirement.
+// Orders, incoming order drafts, and shipments no longer have mock seed data
+// here — the screens (sales/page.tsx, shipments/page.tsx) read and write them
+// directly against the real backend (/api/orders, /api/shipments) instead of
+// in-memory repositories. See OrderRepository and ShipmentRepository removals.
 
 export const INVOICE_SEED: InvoiceProps[] = [
   { id: "INV-2039", number: "INV-2039", orderId: "ORD-1036", status: "Paid", issueDate: "Jul 19", dueDate: "Aug 2" },
@@ -36,15 +34,6 @@ export const INVENTORY_SEED: InventoryItemProps[] = [
   { sku: "CHR-ERG", name: "Ergonomic Chair – Black", category: "Seating", qty: 41, reorderPoint: 15 },
   { sku: "TBL-CNF", name: "Conference Table – 8ft", category: "Tables", qty: 2, reorderPoint: 4 },
   { sku: "LCK-STL", name: "Storage Locker – Steel", category: "Storage", qty: 55, reorderPoint: 20 },
-];
-
-export const SHIPMENT_SEED: ShipmentProps[] = [
-  { id: "SHP-501", number: "SHP-501", orderId: "ORD-1036", invoiceId: "INV-2039", invoiceNumber: "INV-2039", status: "Delivered", date: "Jul 22" },
-  { id: "SHP-502", number: "SHP-502", orderId: "ORD-1038", invoiceId: "INV-2041", invoiceNumber: "INV-2041", status: "Delivered", date: "Jul 29" },
-  { id: "SHP-503", number: "SHP-503", orderId: "ORD-1039", invoiceId: "INV-2042", invoiceNumber: "INV-2042", status: "Dispatched", date: "Aug 5" },
-  { id: "SHP-504", number: "SHP-504", orderId: "ORD-1040", invoiceId: "INV-2043", invoiceNumber: "INV-2043", status: "Packed", date: "Aug 6" },
-  { id: "SHP-505", number: "SHP-505", orderId: "ORD-1041", invoiceId: "INV-2044", invoiceNumber: "INV-2044", status: "Draft", date: "—" },
-  { id: "SHP-506", number: "SHP-506", orderId: "ORD-1042", invoiceId: null, invoiceNumber: null, status: "Draft", date: "—" },
 ];
 
 export const JOB_SEED: ProductionJobProps[] = [
