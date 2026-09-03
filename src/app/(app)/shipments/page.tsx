@@ -8,8 +8,12 @@ import { ShipmentDetailDialog } from "@/components/shipments/ShipmentDetailDialo
 import { NewShipmentDialog, type NewShipmentData } from "@/components/shipments/NewShipmentDialog";
 import { Shipment, type ShipmentEditableFields, type ShipmentStatus } from "@/domain/Shipment";
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
-
 import { API_URL } from "@/lib/apiUrl";
+import { readCache, writeCache } from "@/lib/offlineCache";
+
+const CACHE_KEYS = {
+  shipments: "shipments",
+};
 
 function fmtDate(value: string): string {
   if (!value) return value;
@@ -37,6 +41,13 @@ interface ApiShipment {
   date: string;
 }
 
+interface FetchResult<T> {
+  data: T;
+  orderById: Map<string, Order>;
+  offline: boolean;
+  cachedAt?: string;
+}
+
 function toOrder(o: ApiOrderEmbed): Order {
   return new Order({
     id: o.id,
@@ -60,16 +71,30 @@ function toShipment(s: ApiShipment): Shipment {
   });
 }
 
-async function fetchShipments(): Promise<{ shipments: Shipment[]; orderById: Map<string, Order> }> {
-  const res = await fetch(`${API_URL}/api/shipments`, { credentials: "include" });
-  if (!res.ok) return { shipments: [], orderById: new Map() };
-  const data = await res.json();
-  const apiShipments = data.shipments as ApiShipment[];
+function processApiShipments(apiShipments: ApiShipment[]): { shipments: Shipment[]; orderById: Map<string, Order> } {
   const orderById = new Map<string, Order>();
   for (const s of apiShipments) {
     if (s.order) orderById.set(s.orderId, toOrder(s.order));
   }
   return { shipments: apiShipments.map(toShipment), orderById };
+}
+
+/** Fetches shipments from API; falls back to localStorage cache on failure to support offline drivers/warehouse. */
+async function fetchShipments(): Promise<FetchResult<Shipment[]>> {
+  try {
+    const res = await fetch(`${API_URL}/api/shipments`, { credentials: "include" });
+    if (!res.ok) throw new Error(`GET /api/shipments failed: ${res.status}`);
+    const data = await res.json();
+    const raw = (data.shipments ?? []) as ApiShipment[];
+    writeCache(CACHE_KEYS.shipments, raw);
+    const { shipments, orderById } = processApiShipments(raw);
+    return { data: shipments, orderById, offline: false };
+  } catch {
+    const cached = readCache<ApiShipment[]>(CACHE_KEYS.shipments);
+    const raw = cached?.data ?? [];
+    const { shipments, orderById } = processApiShipments(raw);
+    return { data: shipments, orderById, offline: true, cachedAt: cached?.cachedAt };
+  }
 }
 
 export default function ShipmentsPage() {
@@ -78,34 +103,80 @@ export default function ShipmentsPage() {
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [newShipmentOpen, setNewShipmentOpen] = useState(false);
   const [newShipmentError, setNewShipmentError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const { shipments, orderById } = await fetchShipments();
-        setShipments(shipments);
-        setOrderById(orderById);
+        const result = await fetchShipments();
+        setShipments(result.data);
+        setOrderById(result.orderById);
+        setOffline(result.offline);
+        setCachedAt(result.offline ? result.cachedAt ?? null : null);
       } catch (error) {
         console.error("Error fetching shipments:", error);
       }
     })();
   }, []);
 
+  async function refreshShipments() {
+    const result = await fetchShipments();
+    setShipments(result.data);
+    setOrderById(result.orderById);
+    setOffline(result.offline);
+    setCachedAt(result.offline ? result.cachedAt ?? null : null);
+  }
+
   async function handleSave(patch: Partial<ShipmentEditableFields>) {
     if (!selectedShipment) return;
+    setActionError(null);
     try {
-      await fetch(`${API_URL}/api/shipments/${selectedShipment.id}`, {
+      const res = await fetch(`${API_URL}/api/shipments/${selectedShipment.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(patch),
       });
+      if (!res.ok) throw new Error(`PUT /api/shipments failed: ${res.status}`);
       setSelectedShipment(null);
-      const { shipments, orderById } = await fetchShipments();
-      setShipments(shipments);
-      setOrderById(orderById);
+      await refreshShipments();
     } catch (error) {
       console.error("Error updating shipment:", error);
+      setActionError(offline ? "Cannot update shipment while offline. A live connection is required." : "Failed to update shipment.");
+    }
+  }
+
+  async function handleDispatch(id: string) {
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/shipments/${id}/dispatch`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`PATCH dispatch failed: ${res.status}`);
+      setSelectedShipment(null);
+      await refreshShipments();
+    } catch (error) {
+      console.error("Error dispatching shipment:", error);
+      setActionError(offline ? "Cannot dispatch shipment while offline. A live connection is required." : "Failed to dispatch shipment.");
+    }
+  }
+
+  async function handleDeliver(id: string) {
+    setActionError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/shipments/${id}/deliver`, {
+        method: "PATCH",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`PATCH deliver failed: ${res.status}`);
+      setSelectedShipment(null);
+      await refreshShipments();
+    } catch (error) {
+      console.error("Error delivering shipment:", error);
+      setActionError(offline ? "Cannot mark delivery while offline. A live connection is required." : "Failed to deliver shipment.");
     }
   }
 
@@ -124,12 +195,10 @@ export default function ShipmentsPage() {
         return;
       }
       setNewShipmentOpen(false);
-      const { shipments, orderById } = await fetchShipments();
-      setShipments(shipments);
-      setOrderById(orderById);
+      await refreshShipments();
     } catch (error) {
       console.error("Error creating shipment:", error);
-      setNewShipmentError("Couldn't reach the server. Please try again.");
+      setNewShipmentError("Couldn't reach the server. Please check your connection.");
     }
   }
 
@@ -145,6 +214,35 @@ export default function ShipmentsPage() {
         }
       />
       <div className="flex-1 overflow-auto px-8 pt-6 pb-10">
+        {/* Offline cache notice banner */}
+        {offline && (
+          <div className="mb-4 flex items-center justify-between gap-3 text-[13px] text-[var(--color-neutral-300)] bg-[var(--color-surface)] border border-[var(--color-divider)] rounded-[var(--radius-md)] px-3 py-2.5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span>
+                <strong>Offline Manifest Mode:</strong> Network unreachable. Viewing cached manifest snapshot
+                {cachedAt ? ` (as of ${new Date(cachedAt).toLocaleTimeString()})` : ""}.
+              </span>
+            </div>
+            <span className="text-xs text-[var(--color-neutral-400)]">Changes require live network</span>
+          </div>
+        )}
+
+        {/* Action error banner */}
+        {actionError && (
+          <div className="mb-4 flex items-center justify-between gap-3 text-[13px] text-[var(--color-accent-300)] bg-[var(--color-accent-900)] border border-[var(--color-accent-700)] rounded-[var(--radius-md)] px-3 py-2">
+            <span>{actionError}</span>
+            <button
+              type="button"
+              onClick={() => setActionError(null)}
+              aria-label="Dismiss"
+              className="text-[var(--color-accent-300)] hover:text-[var(--color-accent-100)] cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <ShipmentTable shipments={shipments} orderById={orderById} onSelect={setSelectedShipment} />
       </div>
 
@@ -155,6 +253,8 @@ export default function ShipmentsPage() {
           orderNumber={orderById.get(selectedShipment.orderId)?.number ?? selectedShipment.orderId}
           onClose={() => setSelectedShipment(null)}
           onSave={handleSave}
+          onDispatch={handleDispatch}
+          onDeliver={handleDeliver}
         />
       )}
 

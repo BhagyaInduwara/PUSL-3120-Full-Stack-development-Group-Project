@@ -15,7 +15,8 @@ export interface ShipmentProps {
 }
 
 export interface ShipmentEditableFields {
-  date: string;
+  date?: string;
+  status?: ShipmentStatus;
 }
 
 export class Shipment extends StatusfulEntity {
@@ -44,13 +45,17 @@ export class Shipment extends StatusfulEntity {
     return this._status;
   }
 
-  /** Only a Draft shipment hasn't been packed yet, so only then can its ship date still move. */
+  /** Delivered shipments are finalized and cannot be modified. */
   get canEdit(): boolean {
-    return this._status === "Draft";
+    return this._status !== "Delivered";
   }
 
   get invoiceLabel(): string {
     return this.invoiceNumber ?? this.invoiceId ?? "—";
+  }
+
+  pack(): void {
+    this._status = "Packed";
   }
 
   dispatch(): void {
@@ -64,5 +69,6 @@ export class Shipment extends StatusfulEntity {
   update(patch: Partial<ShipmentEditableFields>): void {
     if (!this.canEdit) return;
     if (patch.date !== undefined) this._date = patch.date;
+    if (patch.status !== undefined) this._status = patch.status;
   }
 }
