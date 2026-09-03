@@ -8,6 +8,7 @@ import { ProductDetailDialog, type ProductEditableFields } from "@/components/se
 import { Product } from "@/domain/Product";
 
 import { API_URL } from "@/lib/apiUrl";
+import { fetchWithCache } from "@/lib/offline";
 
 interface ApiProduct {
   id: string;
@@ -27,14 +28,17 @@ interface FetchedProducts {
 }
 
 async function fetchProducts(): Promise<FetchedProducts> {
-  const res = await fetch(`${API_URL}/api/products`, { credentials: "include" });
-  if (!res.ok) return { products: [], mongoIdBySku: {} };
-  const data = await res.json();
-  const apiProducts = data.products as ApiProduct[];
-  return {
-    products: apiProducts.map(toProduct),
-    mongoIdBySku: Object.fromEntries(apiProducts.map((p) => [p.sku, p.id])),
-  };
+  try {
+    const { data } = await fetchWithCache<{ products: ApiProduct[] }>(`${API_URL}/api/products`);
+    const apiProducts = data.products ?? [];
+    return {
+      products: apiProducts.map(toProduct),
+      mongoIdBySku: Object.fromEntries(apiProducts.map((p) => [p.sku, p.id])),
+    };
+  } catch (error) {
+    console.warn("Failed to fetch products:", error);
+    return { products: [], mongoIdBySku: {} };
+  }
 }
 
 const columns: Column<Product>[] = [

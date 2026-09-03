@@ -8,6 +8,7 @@ import { CustomerDetailDialog, type CustomerEditableFields } from "@/components/
 import { Customer } from "@/domain/Customer";
 
 import { API_URL } from "@/lib/apiUrl";
+import { fetchWithCache } from "@/lib/offline";
 
 interface ApiCustomer {
   id: string;
@@ -22,10 +23,13 @@ function toCustomer(c: ApiCustomer): Customer {
 }
 
 async function fetchCustomers(): Promise<Customer[]> {
-  const res = await fetch(`${API_URL}/api/customers`, { credentials: "include" });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.customers as ApiCustomer[]).map(toCustomer);
+  try {
+    const { data } = await fetchWithCache<{ customers: ApiCustomer[] }>(`${API_URL}/api/customers`);
+    return (data.customers ?? []).map(toCustomer);
+  } catch (error) {
+    console.warn("Failed to fetch customers:", error);
+    return [];
+  }
 }
 
 const columns: Column<Customer>[] = [

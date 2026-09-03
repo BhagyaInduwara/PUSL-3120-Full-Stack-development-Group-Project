@@ -18,6 +18,7 @@ import { InventoryItem } from "@/domain/InventoryItem";
 import { Money } from "@/domain/Money";
 
 import { API_URL } from "@/lib/apiUrl";
+import { fetchWithCache } from "@/lib/offline";
 
 const CATEGORY_COLORS: Record<string, string> = {
   Seating: "#818cf8",
@@ -125,30 +126,30 @@ const EMPTY_DATA: DashboardData = {
 };
 
 async function fetchDashboardData(): Promise<DashboardData> {
-  const [ordersRes, jobsRes, shipmentsRes, inventoryRes, productsRes, activityRes, revenueRes] = await Promise.all([
-    fetch(`${API_URL}/api/orders`, { credentials: "include" }),
-    fetch(`${API_URL}/api/production-jobs`, { credentials: "include" }),
-    fetch(`${API_URL}/api/shipments`, { credentials: "include" }),
-    fetch(`${API_URL}/api/inventory`, { credentials: "include" }),
-    fetch(`${API_URL}/api/products`, { credentials: "include" }),
-    fetch(`${API_URL}/api/activity`, { credentials: "include" }),
-    fetch(`${API_URL}/api/revenue-series`, { credentials: "include" }),
+  const [ordersRes, jobsRes, shipmentsRes, inventoryRes, productsRes, activityRes, revenueRes] = await Promise.allSettled([
+    fetchWithCache<ApiOrder[]>(`${API_URL}/api/orders`),
+    fetchWithCache<{ productionJobs: ApiProductionJob[] }>(`${API_URL}/api/production-jobs`),
+    fetchWithCache<{ shipments: ApiShipment[] }>(`${API_URL}/api/shipments`),
+    fetchWithCache<{ inventory: ApiInventoryItem[] }>(`${API_URL}/api/inventory`),
+    fetchWithCache<{ products: ApiProduct[] }>(`${API_URL}/api/products`),
+    fetchWithCache<{ activities: ApiActivity[] }>(`${API_URL}/api/activity`),
+    fetchWithCache<{ revenueSeries: ApiRevenuePoint[] }>(`${API_URL}/api/revenue-series`),
   ]);
 
-  const orders = ordersRes.ok ? ((await ordersRes.json()) as ApiOrder[]).map(toOrder) : [];
-  const jobs = jobsRes.ok ? ((await jobsRes.json()).productionJobs as ApiProductionJob[]).map(toJob) : [];
-  const shipments = shipmentsRes.ok ? ((await shipmentsRes.json()).shipments as ApiShipment[]) : [];
-  const apiInventory = inventoryRes.ok ? ((await inventoryRes.json()).inventory as ApiInventoryItem[]) : [];
+  const orders = ordersRes.status === "fulfilled" && Array.isArray(ordersRes.value.data) ? ordersRes.value.data.map(toOrder) : [];
+  const jobs = jobsRes.status === "fulfilled" && Array.isArray(jobsRes.value.data?.productionJobs) ? jobsRes.value.data.productionJobs.map(toJob) : [];
+  const shipments = shipmentsRes.status === "fulfilled" && Array.isArray(shipmentsRes.value.data?.shipments) ? shipmentsRes.value.data.shipments : [];
+  const apiInventory = inventoryRes.status === "fulfilled" && Array.isArray(inventoryRes.value.data?.inventory) ? inventoryRes.value.data.inventory : [];
   const inventory = apiInventory.map((i) => new InventoryItem(i));
-  const products = productsRes.ok ? ((await productsRes.json()).products as ApiProduct[]) : [];
+  const products = productsRes.status === "fulfilled" && Array.isArray(productsRes.value.data?.products) ? productsRes.value.data.products : [];
 
-  const rawActivities = activityRes.ok ? (((await activityRes.json()).activities ?? []) as ApiActivity[]) : [];
+  const rawActivities = activityRes.status === "fulfilled" && Array.isArray(activityRes.value.data?.activities) ? activityRes.value.data.activities : [];
   const activities: ActivityItem[] = rawActivities.map((a) => ({
     text: a.message,
     time: formatActivityTime(a.occurredAt),
   }));
 
-  const rawRevenue = revenueRes.ok ? (((await revenueRes.json()).revenueSeries ?? []) as ApiRevenuePoint[]) : [];
+  const rawRevenue = revenueRes.status === "fulfilled" && Array.isArray(revenueRes.value.data?.revenueSeries) ? revenueRes.value.data.revenueSeries : [];
   const revenueSeries: RevenuePoint[] = rawRevenue.map((r) => ({
     week: r.week,
     revenue: r.revenue,

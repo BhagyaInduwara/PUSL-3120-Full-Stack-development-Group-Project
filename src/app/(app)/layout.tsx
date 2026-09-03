@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { getSessionUser } from "@/server/auth/session";
 
 /**
@@ -10,6 +11,9 @@ import { getSessionUser } from "@/server/auth/session";
  *
  * All screens now persist to and fetch directly from MongoDB via Express APIs,
  * so the legacy ERPStoreProvider has been decommissioned.
+ *
+ * An OfflineBanner is mounted at the top of the content area to alert users
+ * whenever network connectivity is interrupted.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
@@ -18,7 +22,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-[var(--color-bg)] text-[var(--color-text)] font-[family-name:var(--font-body)] overflow-hidden">
       <Sidebar user={user.toPublic()} />
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">{children}</div>
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <OfflineBanner />
+        {children}
+      </div>
     </div>
   );
 }
