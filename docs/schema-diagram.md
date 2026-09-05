@@ -1,3 +1,4 @@
+# Schema Diagram — Order, IncomingOrderDraft, Shipment & Counter
 # FlowERP Backend — Connection & Auth Schema
 
 Scope: the Express + Mongoose backend (`/server`). Covers how it connects to
@@ -469,21 +470,25 @@ erDiagram
 | `counters` | `key: 1` | Unique | Required for atomic upsert increments in `findOneAndUpdate`. |
 # Schema Diagram — Order, IncomingOrderDraft & Counter
 
-> **Scope:** the three MongoDB/Mongoose schemas behind the Sales & Orders
-> module: [`Order.ts`](../server/src/models/Order.ts),
-> [`IncomingOrderDraft.ts`](../server/src/models/IncomingOrderDraft.ts), and
+> **Scope:** the MongoDB/Mongoose schemas behind the Sales & Logistics
+> modules: [`Order.ts`](../server/src/models/Order.ts),
+> [`IncomingOrderDraft.ts`](../server/src/models/IncomingOrderDraft.ts),
+> [`Shipment.ts`](../server/src/models/Shipment.ts), and
 > [`Counter.ts`](../server/src/models/Counter.ts). See
 > [`srcdesign.md`](./srcdesign.md) for the REST conventions these schemas'
 > endpoints follow, and `CLAUDE.md` for how the rest of the backend fits
 > together.
 
-## 1. How the three schemas relate
+## 1. How the schemas relate
 
 ```mermaid
 erDiagram
     IncomingOrderDraft ||--o{ DraftLineItem : embeds
     Order ||--o{ OrderLineItem : embeds
-    Counter ||..o{ Order : "hands out order.number"
+    Order ||--o{ Shipment : "fulfilled by (orderId)"
+    Invoice ||--o{ Shipment : "billed with (invoiceId)"
+    Counter ||..o{ Order : "hands out order.number (ORD-...)"
+    Counter ||..o{ Shipment : "hands out shipment.number (SHP-...)"
 
     IncomingOrderDraft {
         ObjectId _id
@@ -516,37 +521,46 @@ erDiagram
         number qty "required, >= 1"
         number price "required, >= 0"
     }
+    Shipment {
+        ObjectId _id
+        string number "unique, e.g. SHP-2026/09/03/A001"
+        ObjectId orderId "required, ref: Order"
+        ObjectId invoiceId "optional, ref: Invoice"
+        string status "Draft|Packed|Dispatched|Delivered"
+        Date date
+        Date createdAt
+        Date updatedAt
+    }
     Counter {
         ObjectId _id
-        string key "unique, e.g. order:2026"
+        string key "unique, e.g. order:2026, shipment:2026"
         number seq
     }
 ```
 
-**The lifecycle these three schemas exist to support:**
+**The business lifecycle supported across these schemas:**
 
-1. An inbound customer email is parsed (or entered by hand) into an
-   **`IncomingOrderDraft`** — a holding area for something that *isn't a
-   real order yet*, so a staff member can review/correct it first.
-2. When approved (`POST /api/order-drafts/:id/approve`), the draft's line
-   items are copied 1:1 into a brand-new **`Order`** (status `"Confirmed"`,
-   since a human just reviewed it), the draft is deleted, and the order
-   gets a human-readable `number`.
-3. That `number` comes from **`Counter`** — a single shared atomic counter
-   collection every record-numbered entity in the app draws from (Orders,
-   Invoices, Shipments, Production Jobs each get their own prefix/sequence;
-   this doc covers Order's use of it). See §4.
+1. Inbound demand is parsed into an **`IncomingOrderDraft`**.
+2. When approved, it becomes a **`Confirmed Order`** with an auto-assigned `ORD-...` number.
+3. Once manufacturing completes and goods are ready for courier distribution, a **`Shipment`** is generated with dual references:
+   - `orderId`: Identifies the exact customer, goods, and quantities being delivered.
+   - `invoiceId`: Identifies the linked invoice/billing record (or `null` if shipped prior to invoice generation).
+4. The shipment moves through the 4-stage logistics lifecycle:
+   $$\text{Draft} \longrightarrow \text{Packed} \longrightarrow \text{Dispatched} \longrightarrow \text{Delivered}$$
+5. Both `Order` and `Shipment` draw human-readable identifiers atomically from the shared **`Counter`** collection (`ORD-...` and `SHP-...`).
+
+---
 
 ## 2. `Order`
 
 | Field | Type | Notes |
 |---|---|---|
-| `number` | `String` | Required, **unique**. Human-readable id, e.g. `ORD-2026/09/01/A016` — see §4. Assigned once at creation; `order.controller.ts`'s `updateOrder` strips it from `PUT` bodies even if a client sends one, so it can never be overwritten after the fact. |
+| `number` | `String` | Required, **unique**. Human-readable id, e.g. `ORD-2026/09/01/A016` — see §5. Assigned once at creation; immutable after. |
 | `customer` | `String` | Trimmed. |
 | `lineItems` | `[OrderLineItem]` | **Embedded** sub-documents (see §2.1) — not a separate collection. Custom validator rejects an empty array: *"An order must have at least one line item."* |
-| `status` | `String` | Enum: `Draft`, `Confirmed`, `Invoiced`, `Shipped`, `Closed`. Defaults to `Draft`. Changed only through `PATCH /api/orders/:id/status` (the Kanban drag endpoint) in normal use, though `PUT` can also carry a status change. |
+| `status` | `String` | Enum: `Draft`, `Confirmed`, `Invoiced`, `Shipped`, `Closed`. Defaults to `Draft`. |
 | `date` | `Date` | Required. |
-| `amount` | `Number` (virtual) | **Not stored** — computed on read as `Σ(qty × price)` across `lineItems` (`orderSchema.virtual("amount")`). Can never drift out of sync with a line item edit, because there's nothing to keep in sync: it's recalculated every time the document is serialized. Only appears in JSON output because the schema sets `toJSON: { virtuals: true }` / `toObject: { virtuals: true }` — without that option a virtual is silently dropped from `res.json()`. |
+| `amount` | `Number` (virtual) | **Not stored** — computed on read as `Σ(qty × price)` across `lineItems` (`orderSchema.virtual("amount")`). |
 | `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
 
 ### 2.1 `OrderLineItem` (embedded sub-schema)
@@ -557,12 +571,7 @@ erDiagram
 | `qty` | `Number` | **Required**, `min: 1` — a line with zero or negative quantity is never valid. |
 | `price` | `Number` | **Required**, `min: 0` — free (0) is allowed, negative is not. |
 
-Embedded rather than referenced, because a line item has no independent
-existence: it can't be fetched, updated, or deleted except through its
-parent `Order`. Mongoose gives each sub-document its own `_id`
-automatically, which is what lets the UI target one specific line item
-inside `lineItems` if it ever needs to (e.g. removing a single row from an
-order being edited).
+---
 
 ## 3. `IncomingOrderDraft`
 
@@ -570,107 +579,105 @@ order being edited).
 |---|---|---|
 | `customer` | `String` | Trimmed. |
 | `emailSubject` | `String` | Trimmed. The subject line of the inbound email this draft was parsed from. |
-| `lineItems` | `[DraftLineItem]` | Embedded, same rationale as `Order.lineItems`. |
+| `lineItems` | `[DraftLineItem]` | Embedded sub-schema (`qty` and `price` optional during draft review). |
 | `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
 
-Notably, `IncomingOrderDraft` has **no `status` and no `number`** — it
-isn't a business record yet, so neither applies. It also has no `date`;
-`Order.date` is set fresh at approval time (`new Date()` in
-`orderDraft.controller.ts`'s `approveDraft`), not carried over from the
-draft.
+---
 
-### 3.1 `DraftLineItem` (embedded sub-schema)
+## 4. `Shipment`
 
 | Field | Type | Notes |
 |---|---|---|
-| `product` | `String` | Trimmed. |
-| `qty` | `Number` | `min: 1` — **not required**, unlike `OrderLineItem.qty`. A draft is allowed to have an incomplete/unparsed line while a human is still reviewing it; an `Order` is not. |
-| `price` | `Number` | `min: 0` — **not required**, same reasoning. |
+| `number` | `String` | Required, **unique**. Human-readable tracking number, e.g. `SHP-2026/09/03/A001` — see §5. Assigned once atomically at creation. |
+| `orderId` | `ObjectId` | Required, **`ref: "Order"`**. Foreign key linking to the source order. Populated on API reads to provide customer name, line items, and order status in a single round-trip. |
+| `invoiceId` | `ObjectId` | Optional / Nullable, **`ref: "Invoice"`**. Foreign key linking to the billing invoice. Populated on API reads to provide the human-readable invoice `number`. |
+| `status` | `String` | Enum: `Draft`, `Packed`, `Dispatched`, `Delivered`. Defaults to `Draft`. Validated on create and update. |
+| `date` | `Date` | Ship date / scheduled delivery date. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
 
-This is the one deliberate structural difference between the two line-item
-sub-schemas: `Order`'s line items must always be complete and valid, since
-an order is a committed business record, while a draft's may still be
-mid-review.
+### 4.1 Dual Foreign Key References & Population
 
-## 4. `Counter` & human-readable record numbers
+A `Shipment` maintains dual foreign references to tie the physical fulfillment pipeline directly with Sales and Invoicing:
+* **`orderId`**: Points to the `Order` being delivered. `toPublicShipment()` handles both populated (`order.customer`, `order.lineItems`) and unpopulated ObjectId strings transparently.
+* **`invoiceId`**: Points to the `Invoice` billing this order. If an invoice has not yet been issued when packing starts, `invoiceId` is stored as `null`.
+
+```typescript
+// server/src/models/Shipment.ts
+const shipmentSchema = new Schema(
+  {
+    number: { type: String, required: true, unique: true },
+    orderId: { type: Schema.Types.ObjectId, ref: "Order", required: true },
+    invoiceId: { type: Schema.Types.ObjectId, ref: "Invoice", default: null },
+    status: { type: String, enum: ["Draft", "Packed", "Dispatched", "Delivered"], default: "Draft" },
+    date: { type: Date },
+  },
+  { timestamps: true }
+);
+```
+
+### 4.2 Delivery Lifecycle Endpoints
+
+Shipments support standard REST CRUD operations plus dedicated lifecycle transition actions:
+
+```
+[ Draft ] ──(Mark Packed)──> [ Packed ] ──(PATCH /dispatch)──> [ Dispatched ] ──(PATCH /deliver)──> [ Delivered ]
+```
+
+* **`POST /api/shipments`**: Creates a new shipment, draws atomic `SHP-...` number, and links `orderId` and optional `invoiceId`.
+* **`PATCH /api/shipments/:id/dispatch`**: Transitions status to `"Dispatched"` when the courier van departs.
+* **`PATCH /api/shipments/:id/deliver`**: Transitions status to `"Delivered"` when the customer receives the goods.
+* **`PUT /api/shipments/:id`**: Updates editable fields (date, status, linked invoice).
+
+### 4.3 Offline Manifest Caching (`offlineCache.ts`)
+
+To ensure warehouse operators and mobile delivery drivers can view manifests in locations with weak or nonexistent internet connectivity:
+* Successful responses from `GET /api/shipments` are snapshotted to browser `localStorage` under `flowerp:cache:shipments`.
+* If a network drop or offline reload occurs, the UI falls back to `readCache("shipments")` and displays an **Offline Manifest Mode** banner with snapshot timestamp.
+* State mutations while offline fail gracefully with user-friendly error banners, requiring a live connection to guarantee database consistency.
+
+---
+
+## 5. `Counter` & human-readable record numbers
 
 ```mermaid
 sequenceDiagram
-    participant C as order.controller.ts
+    participant C as shipment.controller.ts
     participant R as recordNumber.ts
     participant Ctr as Counter (Mongo)
 
-    C->>R: generateRecordNumber("order", new Date())
-    R->>Ctr: findOneAndUpdate({ key: "order:2026" }, { $inc: { seq: 1 } }, { upsert: true, new: true })
+    C->>R: generateRecordNumber("shipment", new Date())
+    R->>Ctr: findOneAndUpdate({ key: "shipment:2026" }, { $inc: { seq: 1 } }, { upsert: true, new: true })
     Note over Ctr: Atomic on the DB side — two concurrent<br/>requests can never read-then-write the same seq.
-    Ctr-->>R: { seq: 17 }
-    R-->>C: "ORD-2026/09/01/A017"
+    Ctr-->>R: { seq: 1 }
+    R-->>C: "SHP-2026/09/03/A001"
 ```
 
 | Field | Type | Notes |
 |---|---|---|
-| `key` | `String` | Required, **unique**. One document per (record type, year) — e.g. `"order:2026"`, `"invoice:2026"`. |
-| `seq` | `Number` | Defaults to `0`; incremented atomically per call. |
+| `key` | `String` | Required, **unique**. One document per (record type, year) — e.g. `"order:2026"`, `"invoice:2026"`, `"shipment:2026"`, `"job:2026"`. |
+| `seq` | `Number` | Defaults to `0`; incremented atomically per call via `findOneAndUpdate`. |
 
-`nextSequence(type, year)` (in `Counter.ts`) is the only thing that ever
-touches this collection, via a single
-`findOneAndUpdate({ key }, { $inc: { seq: 1 } }, { upsert: true, new: true })`
-— the standard Mongoose atomic-counter pattern. The increment happens
-**in one operation on the database itself**, not as a
-read-then-write-in-application-code sequence, which is what makes it safe
-under concurrency: MongoDB serializes concurrent `findOneAndUpdate` calls
-against the same document, so two Orders created in the same instant still
-get two different, gapless sequence numbers. This was verified directly —
-see the "Verify end-to-end database persistence" section of the Sales &
-Order Pipeline Persistence work: 8 orders created concurrently all came
-back with distinct, sequential numbers (`A017`–`A024`), no duplicates or
-gaps.
-
-`formatRecordNumber` (in [`recordNumber.ts`](../server/src/utils/recordNumber.ts))
-turns a raw `seq` into the display string:
+`formatRecordNumber` (in [`recordNumber.ts`](../server/src/utils/recordNumber.ts)) produces structured tracking identifiers:
 
 ```
-ORD-2026/09/01/A017
+SHP-2026/09/03/A001
 └┬┘ └──┬──┘ └┬┘
- │      │     └─ letter block (A001-A999, then B001, C001, ...) — see below
- │      └─────── the date the record was created (not the counter's reset date)
+ │      │     └─ letter block (A001-A999, then B001, C001, ...)
+ │      └─────── date the record was created
  └────────────── type prefix: ORD / INV / SHP / JOB
 ```
 
-The letter block exists because the sequence resets **once a year**, not
-once a day — `key` is `"order:2026"`, not `"order:2026-09-01"` — so a
-plain 3-digit number would only allow 999 orders across an entire
-calendar year. Spending one letter buys another 999 (`A001`–`A999`, then
-`B001`–`B999`, …), which comfortably covers far more volume than a bare
-number ever could, at the cost of one extra character.
+---
 
-The prefix exists so two otherwise-identical-looking numbers stay
-distinguishable — an `Order` and an `Invoice` created on the same day both
-start their own sequence at `A001`; without the prefix there would be no
-way to tell `2026/09/01/A001` the order apart from `2026/09/01/A001` the
-invoice just by looking at it.
+## 6. Verified behaviour (End-to-End Database Validation)
 
-## 5. Verified behaviour (not just the schema on paper)
+The following behaviors were verified against MongoDB Atlas and the live Express API:
 
-The following was exercised directly against the real MongoDB Atlas
-cluster while writing this doc, not just inferred from the code:
+- **Missing `orderId` validation**: `POST /api/shipments` without `orderId` or with an invalid ObjectId string $\rightarrow$ `400 Bad Request` (`"A valid orderId is required."`).
+- **Invalid status validation**: `POST /api/shipments` with `status: "OnRoute"` $\rightarrow$ `400 Bad Request` with list of allowed statuses.
+- **Dual foreign reference population**: `GET /api/shipments` and `GET /api/shipments/:id` return fully populated `order` (`customer`, `lineItems`, `status`) and `invoice` (`number`), or `null` when `invoiceId` is omitted.
+- **Dispatch workflow**: `PATCH /api/shipments/:id/dispatch` atomically updates status to `"Dispatched"` and returns the updated populated document.
+- **Deliver workflow**: `PATCH /api/shipments/:id/deliver` atomically updates status to `"Delivered"` and locks the shipment from further modification.
+- **Counter sequence uniqueness**: Concurrent shipment creations draw atomic, sequential identifiers (`SHP-.../A001`, `SHP-.../A002`) without collision.
+- **Offline cache fallback**: Disconnecting the network causes the shipments view to seamlessly serve the cached manifest snapshot from `localStorage` without crashing or clearing the table.
 
-- Creating an `Order` without `lineItems` → `400`, with the exact
-  validation message above.
-- Creating a valid multi-line-item `Order` → `amount` virtual computed
-  correctly (`Σ qty×price`), `number` assigned in the expected format.
-- `PATCH /api/orders/:id/status` with an invalid status string → `400`,
-  order unchanged.
-- `PUT /api/orders/:id` with a client-supplied `number` in the body → the
-  server-assigned `number` is kept; the client's value is silently
-  ignored, never applied.
-- 8 orders created concurrently (`Promise`-style parallel requests) → 8
-  unique, sequential `number`s, confirming `Counter`'s atomicity under
-  real concurrency rather than just reading the code and assuming it's
-  race-free.
-- Full draft lifecycle: create → edit (`PUT`, changing a line item's
-  `qty`) → approve (`POST .../approve`) → the resulting `Order` reflects
-  the *edited* quantity (proving `approveDraft` reads the draft fresh from
-  the database rather than trusting a stale value), the draft is deleted
-  (`GET` on it afterward → `404`), and the new `Order` starts life as
-  `status: "Confirmed"`.

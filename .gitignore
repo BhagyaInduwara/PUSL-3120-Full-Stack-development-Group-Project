@@ -43,6 +43,7 @@ server/env
 
 # personal planning docs 
 *_prd.md
+prd.md
 
 # typescript
 *.tsbuildinfo

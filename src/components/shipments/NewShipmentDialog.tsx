@@ -8,7 +8,8 @@ import { Select } from "@/components/ui/Select";
 import { API_URL } from "@/lib/apiUrl";
 
 interface ApiOrderOption {
-  _id: string;
+  id?: string;
+  _id?: string;
   number: string;
   customer: string;
 }
@@ -21,7 +22,8 @@ interface ApiInvoiceOption {
 async function fetchOrderOptions(): Promise<ApiOrderOption[]> {
   const res = await fetch(`${API_URL}/api/orders`, { credentials: "include" });
   if (!res.ok) return [];
-  return (await res.json()) as ApiOrderOption[];
+  const data = await res.json();
+  return Array.isArray(data) ? (data as ApiOrderOption[]) : ((data.orders ?? []) as ApiOrderOption[]);
 }
 
 async function fetchInvoiceOptions(): Promise<ApiInvoiceOption[]> {
@@ -57,7 +59,10 @@ export function NewShipmentDialog({ onClose, onSubmit, error }: NewShipmentDialo
         const [fetchedOrders, fetchedInvoices] = await Promise.all([fetchOrderOptions(), fetchInvoiceOptions()]);
         setOrders(fetchedOrders);
         setInvoices(fetchedInvoices);
-        if (fetchedOrders.length > 0) setOrderId(fetchedOrders[0]._id);
+        if (fetchedOrders.length > 0) {
+          const firstId = fetchedOrders[0].id ?? fetchedOrders[0]._id ?? "";
+          setOrderId(firstId);
+        }
       } catch (err) {
         console.error("Error fetching orders/invoices:", err);
       }
@@ -88,11 +93,14 @@ export function NewShipmentDialog({ onClose, onSubmit, error }: NewShipmentDialo
       <Field label="Order">
         <Select value={orderId} onChange={(e) => setOrderId(e.target.value)}>
           {orders.length === 0 && <option value="">No orders available</option>}
-          {orders.map((o) => (
-            <option key={o._id} value={o._id}>
-              {o.number} — {o.customer}
-            </option>
-          ))}
+          {orders.map((o) => {
+            const id = o.id ?? o._id ?? "";
+            return (
+              <option key={id} value={id}>
+                {o.number} — {o.customer}
+              </option>
+            );
+          })}
         </Select>
       </Field>
       <Field label="Invoice (optional)">

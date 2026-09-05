@@ -19,7 +19,7 @@ export async function listShipments(_req: Request, res: Response): Promise<void>
 
 /** GET /api/shipments/:id */
 export async function getShipment(req: Request, res: Response): Promise<void> {
-  const shipment = await Shipment.findById(req.params.id);
+  const shipment = await Shipment.findById(req.params.id).populate("orderId").populate("invoiceId", "number");
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
@@ -44,13 +44,17 @@ export async function createShipment(req: Request, res: Response): Promise<void>
   }
 
   const number = await generateRecordNumber("shipment", new Date());
-  const shipment = await Shipment.create({
+  let shipment = await Shipment.create({
     number,
     orderId,
     invoiceId: req.body?.invoiceId ?? null,
     status: req.body?.status,
     date: req.body?.date,
   });
+  shipment = await shipment.populate("orderId");
+  if (shipment.invoiceId) {
+    shipment = await shipment.populate("invoiceId", "number");
+  }
   res.status(201).json({ shipment: toPublicShipment(shipment) });
 }
 
@@ -81,7 +85,11 @@ export async function updateShipment(req: Request, res: Response): Promise<void>
   }
   if (req.body?.date !== undefined) patch.date = req.body.date;
 
-  const shipment = await Shipment.findByIdAndUpdate(req.params.id, { $set: patch }, { new: true, runValidators: true });
+  const shipment = await Shipment.findByIdAndUpdate(
+    req.params.id,
+    { $set: patch },
+    { new: true, runValidators: true }
+  ).populate("orderId").populate("invoiceId", "number");
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
@@ -91,7 +99,11 @@ export async function updateShipment(req: Request, res: Response): Promise<void>
 
 /** PATCH /api/shipments/:id/dispatch — no body needed. */
 export async function dispatchShipment(req: Request, res: Response): Promise<void> {
-  const shipment = await Shipment.findByIdAndUpdate(req.params.id, { $set: { status: "Dispatched" } }, { new: true });
+  const shipment = await Shipment.findByIdAndUpdate(
+    req.params.id,
+    { $set: { status: "Dispatched" } },
+    { new: true }
+  ).populate("orderId").populate("invoiceId", "number");
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
@@ -101,7 +113,11 @@ export async function dispatchShipment(req: Request, res: Response): Promise<voi
 
 /** PATCH /api/shipments/:id/deliver — no body needed. */
 export async function deliverShipment(req: Request, res: Response): Promise<void> {
-  const shipment = await Shipment.findByIdAndUpdate(req.params.id, { $set: { status: "Delivered" } }, { new: true });
+  const shipment = await Shipment.findByIdAndUpdate(
+    req.params.id,
+    { $set: { status: "Delivered" } },
+    { new: true }
+  ).populate("orderId").populate("invoiceId", "number");
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
