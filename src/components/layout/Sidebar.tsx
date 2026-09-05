@@ -14,6 +14,8 @@ import {
   LogoutIcon,
 } from "@/components/icons";
 import type { PublicUser } from "@/domain/User";
+import { UserMenu } from "./UserMenu";
+import { UserDetailDialog, type UserEditableFields } from "@/components/settings/UserDetailDialog";
 
 interface NavItem {
   href: string;
@@ -30,10 +32,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/production", label: "Production", Icon: ProductionIcon },
 ];
 
-function initials(username: string): string {
-  return username.slice(0, 2).toUpperCase();
-}
-
 /**
  * Sidebar — self-contained: it owns its own collapsed/expanded state.
  * Because it's mounted once in (app)/layout.tsx, that state survives
@@ -45,6 +43,8 @@ function initials(username: string): string {
 export function Sidebar({ user }: { user: PublicUser }) {
   const [expanded, setExpanded] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -53,6 +53,27 @@ export function Sidebar({ user }: { user: PublicUser }) {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
+  }
+
+  /** Same PUT this same edit takes from Settings > Users — see UsersManager.handleSaveUser. */
+  async function handleSaveProfile(patch: UserEditableFields) {
+    setProfileSaveError(null);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setProfileSaveError(data.error ?? "Couldn't save your profile.");
+        return;
+      }
+      setProfileOpen(false);
+      router.refresh();
+    } catch {
+      setProfileSaveError("Couldn't reach the server. Please try again.");
+    }
   }
 
   return (
@@ -117,30 +138,40 @@ export function Sidebar({ user }: { user: PublicUser }) {
       </button>
 
       <div className="p-3 pt-3.5 border-t border-[var(--color-divider)] flex items-center gap-2.5">
-        <div className="w-[30px] h-[30px] flex-none rounded-full bg-[var(--color-neutral-800)] flex items-center justify-center text-xs font-semibold text-[var(--color-neutral-200)]">
-          {initials(user.username)}
+        <div className="min-w-0 flex-1">
+          <UserMenu user={user} expanded={expanded} onOpenProfile={() => setProfileOpen(true)} />
         </div>
         {expanded && (
-          <>
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis capitalize">
-                {user.username}
-              </div>
-              <div className="text-[11px] text-[var(--color-neutral-500)] capitalize">{user.role}</div>
-            </div>
-            <button
-              type="button"
-              title="Log out"
-              aria-label="Log out"
-              disabled={loggingOut}
-              onClick={handleLogout}
-              className="flex-none p-1.5 rounded-lg text-[var(--color-neutral-500)] hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] hover:text-[var(--color-text)] disabled:opacity-50"
-            >
-              <LogoutIcon width={16} height={16} />
-            </button>
-          </>
+          <button
+            type="button"
+            title="Log out"
+            aria-label="Log out"
+            disabled={loggingOut}
+            onClick={handleLogout}
+            className="flex-none p-1.5 rounded-lg text-[var(--color-neutral-500)] hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] hover:text-[var(--color-text)] disabled:opacity-50"
+          >
+            <LogoutIcon width={16} height={16} />
+          </button>
         )}
       </div>
+
+      {profileOpen && (
+        <UserDetailDialog
+          user={user}
+          isAdmin={user.role === "admin"}
+          onClose={() => {
+            setProfileOpen(false);
+            setProfileSaveError(null);
+          }}
+          onSave={handleSaveProfile}
+        />
+      )}
+
+      {profileSaveError && profileOpen && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 text-[13px] text-[var(--color-accent-300)] bg-[var(--color-accent-900)] border border-[var(--color-accent-700)] rounded-[var(--radius-md)] px-3 py-2">
+          {profileSaveError}
+        </div>
+      )}
     </div>
   );
 }

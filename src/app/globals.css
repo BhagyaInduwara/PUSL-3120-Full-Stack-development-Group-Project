@@ -7,6 +7,24 @@
  * they can't collide with Tailwind's own default color palette, and so
  * component code can reference them with Tailwind's arbitrary-value syntax,
  * e.g. `bg-[var(--color-surface)]`. See CLAUDE.md "Design tokens" section.
+ *
+ * Light/dark theme: the "structural" tokens (bg, surface, text, accent,
+ * accent-2, divider, shadows) AND the numbered neutral, accent, and
+ * accent-2 swatches all get redefined under `[data-theme="light"]`
+ * further down. The numbered swatches are mirrored end-to-end (100<->900,
+ * 200<->800, ...) rather than left alone: they're a lightness ramp used
+ * both for de-emphasized body text (e.g. text-neutral-500 for a table's
+ * date column) AND for status-badge bg/text pairs (StatusPalette.ts pairs
+ * e.g. neutral-800 background with neutral-100 text). Freezing them was
+ * tried first and was wrong — dark-mode neutral-400/500, tuned to read as
+ * "dimmed but legible" against a near-black page, become nearly invisible
+ * at the same lightness against a white one. Mirroring keeps every
+ * badge's bg/text pair exactly as contrasting as before (just flipped
+ * from a dark chip to a light one) while fixing every plain-text usage at
+ * the same time — there's no code path that needed to distinguish the two
+ * cases. ThemeProvider (see src/components/theme/) sets data-theme on
+ * <html>, defaulting to dark until a user explicitly switches via the
+ * sidebar's user menu.
  */
 :root {
   --color-bg: #161826;
@@ -15,6 +33,10 @@
   --color-accent: #9184d9;
   --color-accent-2: #a7a1db;
   --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+
+  --shadow-sm: 0 0 0 1px #3f424d;
+  --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0, 0, 0, 0.65);
 
   --color-neutral-100: #f3f5fe;
   --color-neutral-200: #e4e7f5;
@@ -60,10 +82,62 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 14px;
+}
 
-  --shadow-sm: 0 0 0 1px #3f424d;
-  --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0, 0, 0, 0.55);
-  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0, 0, 0, 0.65);
+/*
+ * Light theme — same accent hue family as dark, just deepened a step
+ * (#7566d1/#8b7ecf instead of #9184d9/#a7a1db) since the lighter dark-mode
+ * tones don't carry enough contrast against a white surface. Same
+ * lavender-leaning neutral bias, inverted from light-text-on-near-black to
+ * dark-text-on-near-white. Border-ring shadows are lightened to match —
+ * the dark-mode rings read as a heavy border on a white card otherwise.
+ */
+[data-theme="light"] {
+  --color-bg: #f6f5fb;
+  --color-surface: #ffffff;
+  --color-text: #1e1f2e;
+  --color-accent: #7566d1;
+  --color-accent-2: #8b7ecf;
+  --color-divider: color-mix(in srgb, #1e1f2e 12%, transparent);
+
+  --shadow-sm: 0 0 0 1px #e3e1ee;
+  --shadow-md: 0 0 0 1px #d8d5e9, 0 6px 18px rgba(30, 31, 46, 0.12);
+  --shadow-lg: 0 0 0 1px #c3bfdd, 0 16px 40px rgba(30, 31, 46, 0.18);
+
+  /* Mirrored end-to-end from the dark values above — see the comment block at the top of this file. */
+  --color-neutral-100: #292b31;
+  --color-neutral-200: #3f424d;
+  --color-neutral-300: #595d6c;
+  --color-neutral-400: #75798c;
+  /* Deliberately darker than a pure mirror (dark's neutral-500 is its own
+     mirror at the ramp's midpoint, #9397ab) — that value is under ~3:1
+     contrast against white, too low for the secondary body text it's
+     used as (dates, subtitles, muted labels). */
+  --color-neutral-500: #686c82;
+  --color-neutral-600: #b2b6ca;
+  --color-neutral-700: #cfd3e5;
+  --color-neutral-800: #e4e7f5;
+  --color-neutral-900: #f3f5fe;
+
+  --color-accent-100: #2b2741;
+  --color-accent-200: #423a6a;
+  --color-accent-300: #5d5294;
+  --color-accent-400: #796cbf;
+  --color-accent-500: #968ae0;
+  --color-accent-600: #b5abfc;
+  --color-accent-700: #d2cefd;
+  --color-accent-800: #e7e5fe;
+  --color-accent-900: #f5f4ff;
+
+  --color-accent-2-100: #2b293a;
+  --color-accent-2-200: #423e5d;
+  --color-accent-2-300: #5c5783;
+  --color-accent-2-400: #7972a9;
+  --color-accent-2-500: #9690c9;
+  --color-accent-2-600: #b5afe8;
+  --color-accent-2-700: #d2cefd;
+  --color-accent-2-800: #e7e5fe;
+  --color-accent-2-900: #f5f4ff;
 }
 
 body {
@@ -73,6 +147,7 @@ body {
   font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.55;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 h1, h2, h3, h4, h5, h6 {

@@ -25,6 +25,7 @@ import { IncomingOrderDraft } from "../models/IncomingOrderDraft.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
 import InventoryItem from "../models/InventoryItem.js";
 import ProductionJob from "../models/ProductionJob.js";
+import { ActivityFeedEntry, RevenueSeriesPoint } from "../models/Dashboard.js";
 
 /** Seed dates are "Jul 18"-style strings with no year — anchor them all to the same demo year. */
 const SEED_YEAR = 2026;
@@ -114,18 +115,55 @@ const SHIPMENT_SEED = [
 ] as const;
 
 const JOB_SEED = [
-  { product: "Executive Desk – Walnut", qty: 17, due: "Aug 8", status: "In Progress", progress: 65 },
-  { product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
-  { product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned", progress: 0 },
-  { product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned", progress: 0 },
-  { product: "Ergonomic Chair – Black", qty: 12, due: "Aug 6", status: "Completed", progress: 100 },
-  { product: "Reception Desk – L-Shape", qty: 3, due: "Aug 14", status: "Planned", progress: 0 },
-  { product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed", progress: 100 },
+  { orderSeedId: "ORD-1042", customer: "Foothill Realty Partners", product: "Executive Desk – Walnut", qty: 5, due: "Aug 8", status: "In Progress", progress: 65 },
+  { orderSeedId: "ORD-1045", customer: "Harborline Logistics", product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
+  { orderSeedId: null, customer: "Internal Stock", product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned", progress: 0 },
+  { orderSeedId: "ORD-1044", customer: "Crestwood Architects", product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned", progress: 0 },
+  { orderSeedId: "ORD-1041", customer: "Meridian Dental Group", product: "Ergonomic Chair – Black", qty: 8, due: "Aug 6", status: "Completed", progress: 100 },
+  { orderSeedId: "ORD-1040", customer: "Union Square Café Co.", product: "Reception Desk – L-Shape", qty: 1, due: "Aug 14", status: "Planned", progress: 0 },
+  { orderSeedId: "ORD-1043", customer: "Bluepeak Coworking", product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed", progress: 100 },
 ] as const;
+
+const now = Date.now();
+const ACTIVITY_FEED_SEED = [
+  { message: "ORD-1041 moved to Invoiced", occurredAt: new Date(now - 2 * 60 * 60 * 1000) },
+  { message: "INV-2043 sent to Union Square Café Co.", occurredAt: new Date(now - 4 * 60 * 60 * 1000) },
+  { message: "SHP-503 dispatched to Harborline Logistics", occurredAt: new Date(now - 5 * 60 * 60 * 1000) },
+  { message: "New draft order ORD-1047 parsed from email", occurredAt: new Date(now - 8 * 60 * 60 * 1000) },
+  { message: "JOB-305 marked Completed", occurredAt: new Date(now - 24 * 60 * 60 * 1000) },
+  { message: "ORD-1044 confirmed by Crestwood Architects", occurredAt: new Date(now - 30 * 60 * 60 * 1000) },
+];
+
+const REVENUE_SERIES_SEED = [
+  { week: "W1", revenue: 8300, orders: 14, sortOrder: 1 },
+  { week: "W2", revenue: 10600, orders: 17, sortOrder: 2 },
+  { week: "W3", revenue: 9200, orders: 15, sortOrder: 3 },
+  { week: "W4", revenue: 12600, orders: 21, sortOrder: 4 },
+  { week: "W5", revenue: 11600, orders: 19, sortOrder: 5 },
+  { week: "W6", revenue: 14000, orders: 23, sortOrder: 6 },
+  { week: "W7", revenue: 15000, orders: 25, sortOrder: 7 },
+  { week: "W8", revenue: 13100, orders: 20, sortOrder: 8 },
+];
 
 async function main() {
   await connectDB();
 
+  // --- Seed Dashboard Analytics (Activity Feed & Revenue Series) ---
+  if ((await ActivityFeedEntry.countDocuments()) === 0) {
+    await ActivityFeedEntry.insertMany(ACTIVITY_FEED_SEED);
+    console.log(`[seed] created ${ACTIVITY_FEED_SEED.length} activity feed entries.`);
+  } else {
+    console.log("[seed] activity feed already present, skipping.");
+  }
+
+  if ((await RevenueSeriesPoint.countDocuments()) === 0) {
+    await RevenueSeriesPoint.insertMany(REVENUE_SERIES_SEED);
+    console.log(`[seed] created ${REVENUE_SERIES_SEED.length} revenue series points.`);
+  } else {
+    console.log("[seed] revenue series already present, skipping.");
+  }
+
+  // --- Seed Core Master Data (Customers, Products, Orders, etc.) ---
   if ((await Customer.countDocuments()) > 0) {
     console.log("[seed] master data already present, skipping.");
     await mongoose.disconnect();
@@ -139,6 +177,7 @@ async function main() {
   console.log(`[seed] created ${CUSTOMER_SEED.length} customers, ${SUPPLIER_SEED.length} suppliers, ${PRODUCT_SEED.length} products, ${INVENTORY_SEED.length} inventory items.`);
 
   const orderIdBySeedId = new Map<string, mongoose.Types.ObjectId>();
+  const orderNumberBySeedId = new Map<string, string>();
   for (const o of ORDER_SEED) {
     const order = await Order.create({
       number: await generateRecordNumber("order", new Date()),
@@ -148,6 +187,7 @@ async function main() {
       date: parseDate(o.date),
     });
     orderIdBySeedId.set(o.seedId, order._id);
+    orderNumberBySeedId.set(o.seedId, order.number);
   }
   console.log(`[seed] created ${ORDER_SEED.length} orders.`);
 
@@ -183,9 +223,15 @@ async function main() {
   console.log(`[seed] created ${SHIPMENT_SEED.length} shipments.`);
 
   for (const j of JOB_SEED) {
+    const orderNumber = j.orderSeedId ? orderNumberBySeedId.get(j.orderSeedId) : undefined;
     await ProductionJob.create({
       number: await generateRecordNumber("job", new Date()),
-      ...j,
+      orderNumber: orderNumber || undefined,
+      customer: j.customer,
+      product: j.product,
+      qty: j.qty,
+      status: j.status,
+      progress: j.progress,
       due: parseDate(j.due),
     });
   }

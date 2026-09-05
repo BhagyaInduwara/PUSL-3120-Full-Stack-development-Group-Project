@@ -8,6 +8,7 @@ import { SupplierDetailDialog, type SupplierEditableFields } from "@/components/
 import { Supplier } from "@/domain/Supplier";
 
 import { API_URL } from "@/lib/apiUrl";
+import { fetchWithCache } from "@/lib/offline";
 
 interface ApiSupplier {
   id: string;
@@ -22,10 +23,13 @@ function toSupplier(s: ApiSupplier): Supplier {
 }
 
 async function fetchSuppliers(): Promise<Supplier[]> {
-  const res = await fetch(`${API_URL}/api/suppliers`, { credentials: "include" });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.suppliers as ApiSupplier[]).map(toSupplier);
+  try {
+    const { data } = await fetchWithCache<{ suppliers: ApiSupplier[] }>(`${API_URL}/api/suppliers`);
+    return (data.suppliers ?? []).map(toSupplier);
+  } catch (error) {
+    console.warn("Failed to fetch suppliers:", error);
+    return [];
+  }
 }
 
 const columns: Column<Supplier>[] = [

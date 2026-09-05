@@ -23,11 +23,13 @@ export const getProductionJobById = asyncHandler(async (req: Request, res: Respo
 
 // Create a new production job
 export const createProductionJob = asyncHandler(async (req: Request, res: Response) => {
-  const { product, qty, due, status, progress } = req.body;
+  const { product, qty, due, status, progress, orderNumber, customer } = req.body;
 
   const number = await generateRecordNumber("job", new Date());
   const newJob = await ProductionJob.create({
     number,
+    orderNumber,
+    customer,
     product,
     qty,
     due,
@@ -40,11 +42,11 @@ export const createProductionJob = asyncHandler(async (req: Request, res: Respon
 
 // Update an entire production job
 export const updateProductionJob = asyncHandler(async (req: Request, res: Response) => {
-  const { product, qty, due, status, progress } = req.body;
+  const { product, qty, due, status, progress, orderNumber, customer } = req.body;
   
   const updatedJob = await ProductionJob.findByIdAndUpdate(
     req.params.id,
-    { product, qty, due, status, progress },
+    { product, qty, due, status, progress, orderNumber, customer },
     { new: true, runValidators: true }
   );
   
