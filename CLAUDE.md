@@ -42,7 +42,9 @@ src/
   store/            ERPStore — the app's state, framework-agnostic
   components/       Presentational React components, grouped by feature
   app/              Next.js routes — thin: fetch from the store, render components
-  server/auth/      Server-only auth (sessions, password hashing) — see "Authentication & Users"
+  server/auth/      Server-only session handling (JWT verify/sign, cookie
+                     read/write) — see "Authentication & Users". Password
+                     hashing itself lives only in /server now (MongoDB-side).
   proxy.ts          Route protection, runs before every matched request
 ```
 
@@ -176,115 +178,113 @@ established is probably the more likely path anyway.
 
 ## Authentication & Users
 
-Custom username/password auth, not Supabase Auth — deliberately. The plan
-is to migrate off Supabase to MongoDB later, and Supabase Auth's user
-store doesn't travel with that move, so login/session logic is hand-rolled
-against a plain `users` table/repository instead, the same way every
-other entity in this app is. Default account: **admin / admin@123**
-(seeded by both `src/repositories/user-seed-data.ts` and
-`DB_V1_Insert.sql` — see below).
+Custom username/password auth end-to-end, backed by MongoDB via the
+Express backend (`/server`) — not Supabase Auth, and (as of the cutover
+described below) not an in-memory Next.js store either. Default account:
+**admin / admin@123** (seeded by `server/src/scripts/seedAdmin.ts` —
+`npm run seed`; `DB_V1_Insert.sql` seeds the same credentials into the
+legacy Supabase prototype's own data — see "Database (Supabase, V1)"
+below).
 
-**Domain** — [`User`](src/domain/User.ts) extends `Entity` like everything
-else, but its password hash sits behind a private field with *no* public
-getter for the raw value; the only way to get data out of a `User` for a
-response body is `toPublic()`, which structurally cannot include the
-hash. This is the same encapsulation pattern as `Order.status` — the
-class itself decides what's safe to expose, not each call site
-remembering to omit a field.
+**Domain (Next.js side)** — [`User`](src/domain/User.ts) is a thin,
+password-hash-free identity type (`id`, `username`, `role`, `createdAt`)
+built purely from a verified JWT's claims (see "Sessions" below). It never
+carries a password hash at all — the hash never leaves MongoDB, see
+"Password hashing (MongoDB side)" below for where that happens.
+`User`/`PublicUser` are still exported from the shared `src/domain` barrel
+since they're plain types, nothing sensitive.
 
-**Server-only boundary** — everything that can see a password hash lives
-under `src/server/auth/` or in `UserRepository`/`user-seed-data.ts`, and
-every one of those files opens with `import "server-only"` (the
-[`server-only`](https://www.npmjs.com/package/server-only) package, which
-makes it a **build error** — not just a lint warning — for a `"use client"`
-file to import one of them, even transitively). This is why Users
-management is the one Settings tab that *isn't* a client component
-reading `ERPStore`: [`settings/users/page.tsx`](<src/app/(app)/settings/users/page.tsx>)
-is a Server Component that calls `userRepository.findAll()` directly and
-hands only the already-public shape down to the client
-[`UsersManager`](src/components/settings/UsersManager.tsx). `User`/`PublicUser`
-types are still exported from the shared `src/domain` barrel (they're
-just plain types, nothing sensitive), but `UserRepository` itself is
-never reachable from `ERPStore`.
+**Sessions** — [`token.ts`](src/server/auth/token.ts) signs/verifies a
+standard 3-part HS256 JWT (header.payload.signature, base64url) using the
+Web Crypto API (`crypto.subtle`) rather than a JWT library, built to be
+byte-for-byte interoperable with the tokens the Express backend signs via
+`jsonwebtoken` (same `JWT_SECRET`, same claim shape, same
+`flowerp_token` cookie name) — either side can verify a token the other
+side issued. There's no server-side session store: the signature alone is
+what makes the token trustworthy, checked via `crypto.subtle.verify`
+(timing-safe). The trade-off is that a session can't be revoked before it
+expires (7 days, `SESSION_MAX_AGE_SECONDS`) — acceptable for this
+project's scale. [`session.ts`](src/server/auth/session.ts) wraps this
+with cookie read/write (`next/headers`) and a `getSessionUser()` for use
+in Server Components/Route Handlers; it builds the `User` straight from
+the token's claims, since there's no local repository left to look
+anything up in.
 
-**Sessions** — [`token.ts`](src/server/auth/token.ts) hand-rolls a small
-signed token (JSON payload + HMAC-SHA256 signature, base64url,
-dot-separated — the same shape as a JWT, without a JWT library), built
-entirely on the Web Crypto API (`crypto.subtle`) so the identical code
-verifies a session in every runtime the app touches it from. There's no
-server-side session store: the signature alone is what makes the token
-trustworthy, checked via `crypto.subtle.verify` (timing-safe). The
-trade-off is that a session can't be revoked before it expires
-(7 days, `SESSION_MAX_AGE_SECONDS`) — acceptable for a single-admin V1,
-worth a real session table once the database is real.
-[`session.ts`](src/server/auth/session.ts) wraps this with cookie
-read/write (`next/headers`) and a `getSessionUser()` that also confirms
-the user still exists, for use in Server Components/Route Handlers.
-
-**Passwords** — [`PasswordHasher`](src/server/auth/PasswordHasher.ts) is
-the one place bcrypt (via `bcryptjs`) gets called from. Its hashes are
-wire-compatible with Postgres's `pgcrypto` `crypt(..., gen_salt('bf'))`,
-which is what `DB_V1_Insert.sql` uses to seed the admin row — so a future
-`SqlUserRepository` could verify a password against either side's hash
-without re-hashing anything.
+**Password hashing (MongoDB side)** — bcrypt hashing/verification happens
+exclusively in `/server` now, via
+[`server/src/utils/passwordHasher.ts`](server/src/utils/passwordHasher.ts),
+against the `passwordHash` field on the Mongoose `User` model
+(`select: false`, excluded from every query by default). See "Backend
+(Express + Mongoose)" below and
+[`docs/schema-diagram.md`](docs/schema-diagram.md) for the full schema.
+The Next.js side has no equivalent file anymore — it never sees a raw
+password or a hash.
 
 **Route protection** — [`src/proxy.ts`](src/proxy.ts) (Next.js 16 renamed
 the `middleware.ts` file convention to `proxy.ts` — same job, same
 `export function` shape, just `proxy` instead of `middleware`; migrated
 with `npx @next/codemod@canary middleware-to-proxy`) runs before every
 matched request, verifies the session cookie via `token.ts` only (no
-repository, no bcrypt — it trusts the token's signed claims rather than
-re-checking the database on every request), and redirects to `/login` if
-there's no valid session, or away from `/login` if there already is one.
-API routes are excluded from its matcher and instead guard themselves
-inline (`getSessionUser()` inside each `route.ts`), returning 401/403
-JSON rather than a redirect — redirecting a `fetch()` call to an HTML
-login page would just break the caller.
+network call — it trusts the token's signed claims), and redirects to
+`/login` if there's no valid session, or away from `/login` if there
+already is one. API routes are excluded from its matcher and guard
+themselves inline, returning 401/403 JSON rather than a redirect —
+redirecting a `fetch()` call to an HTML login page would just break the
+caller.
 
-**Endpoints** — `POST /api/auth/login`, `POST /api/auth/logout`,
-`GET /api/users` (any signed-in user), `POST /api/users` (admin role
-only — checked server-side via `getSessionUser().role`, not just a
-hidden "Add user" button in the UI). Login compares against a dummy
-bcrypt hash when the username doesn't exist, so "no such user" and
-"wrong password" take roughly the same time — a minor defense against
-timing-based username enumeration.
+**Endpoints, and why they're proxies, not handlers** — every Next.js
+auth/user route (`/api/auth/login`, `/api/auth/register`,
+`/api/auth/logout`, `/api/users`, `/api/users/[id]`, plus the catch-all
+[`/api/[...path]`](<src/app/api/[...path]/route.ts>) for every other
+backend endpoint) forwards the request to the real Express backend
+server-to-server rather than doing any work itself, then re-issues the
+backend's JWT as a cookie scoped to the frontend's own origin. That
+indirection — rather than the browser calling the backend's domain
+directly — exists because modern browsers block third-party cookies: a
+cookie set by the backend's domain while browsing the frontend's domain
+silently never gets stored, no matter how correctly `SameSite`/`Secure`
+are configured. Routing every call through this same-origin proxy means
+the browser only ever needs its one ordinary same-site cookie; see the
+proxy route's own file comment and
+[`docs/schema-diagram.md`](docs/schema-diagram.md) §2.2 for the full
+request sequence. `settings/users/page.tsx` is the one exception that
+fetches the backend directly instead of through a client-side proxy call
+— it's a Server Component, so its `fetch()` already runs server-to-server
+and never touches the browser's cookie jar.
 
-**A real bug this surfaced, worth remembering**: the first version of
-`UserRepository` exported a plain `export const userRepository = new
-UserRepository()` module-level singleton — the same pattern every other
-repository already uses safely, since they're only ever imported from
-client-side `ERPStore` code bundled together. `UserRepository` is
-different: it's imported from *both* a Route Handler (`/api/users`) and a
-Server Component (`settings/users/page.tsx`). In dev, under Turbopack,
-those two ended up with **separate module instances** — a user created
-through the API was visible to `curl` hitting `/api/users` directly, but
-invisible to the Server Component reading the "same" import a moment
-later, even after a full page reload. The fix was anchoring the instance
-on `globalThis` instead (see the comment in
-[`UserRepository.ts`](src/repositories/UserRepository.ts)) — the standard
-fix for this exact class of bug (it's the same pattern Prisma's own
-Next.js docs recommend for its client instance). The deeper lesson: a
-plain module-level singleton is not guaranteed to be *the same object*
-everywhere in Next.js — Route Handlers and Server Components can land in
-different module graphs in dev, and most production deployments run each
-route as its own serverless invocation with no shared memory at all. A
-real database sidesteps this entirely, since the database becomes the
-shared state instead of process memory — one more reason this in-memory
-version is explicitly a placeholder.
+**A real bug hit along the way, worth remembering**: before the MongoDB
+cutover, the Next.js side had its own in-memory `UserRepository` (a plain
+array, same shape as every other repository — see "The data layer"
+above). Its first version exported a plain `export const userRepository =
+new UserRepository()` module-level singleton, and under Turbopack dev
+that singleton ended up with **separate module instances** across a
+Route Handler and a Server Component — a user created through the API
+was invisible to the page reading the "same" import a moment later. The
+fix was anchoring the instance on `globalThis` instead (the standard fix
+for this class of bug — the same pattern Prisma's own Next.js docs
+recommend for its client instance). The deeper lesson, and part of why
+that in-memory repository doesn't exist anymore: a plain module-level
+singleton isn't guaranteed to be the same object everywhere in Next.js,
+and most production deployments run each route as its own serverless
+invocation with no shared memory at all. A real database sidesteps the
+whole problem, since the database becomes the shared state instead of
+process memory.
 
-**Status: this Next.js-side auth is a validated prototype, not the
-graded backend.** Everything above (`src/proxy.ts`, `src/app/api/auth/*`,
-`src/app/api/users/*`, `src/server/auth/*`, the in-memory
-`UserRepository`) was built and verified end-to-end first — login, wrong
-password, logout, route protection, and the Users tab all confirmed
-working in a real browser — to prove the auth *design* before committing
-it to the brief's mandated stack. It's being superseded by the real
-Express + Mongoose backend below, not thrown away: the password-hashing
-approach, the `User` shape, the encapsulation pattern, and the whole
-Settings → Users UI carry over directly. Once `/server` is confirmed
-working end-to-end (needs a real `MONGODB_URI` — see below), the plan is
-to point the frontend's auth calls at `/server` instead and delete the
-Next.js-side auth code so there's exactly one backend, not two.
+**Status: fully cut over to MongoDB — the Next.js-side prototype is
+decommissioned.** `src/repositories/UserRepository.ts`,
+`src/repositories/user-seed-data.ts`, and the now-unused
+`src/server/auth/PasswordHasher.ts` have been deleted — nothing imports
+them anymore, since every auth/user route proxies to `/server` (see
+"Endpoints" above). What's left under `src/server/auth/` is purely
+session-cookie plumbing (`token.ts`, `session.ts`, `constants.ts`,
+`types.ts`), not a second identity store. Login, register, wrong
+password, logout, route protection, and the Users tab (list + add +
+admin-only edit) are all confirmed working end-to-end in a real browser
+against the real MongoDB Atlas cluster. See "Backend (Express +
+Mongoose)" below for the MongoDB-side implementation, and
+[`docs/schema-diagram.md`](docs/schema-diagram.md) for the connection and
+user-security schema documentation (Core Connection Architecture, User
+collection schema, request/response flow, authorization checks).
 
 ## Backend (Express + Mongoose)
 
@@ -305,7 +305,8 @@ actually being graded on the backend side ("clear separation of concerns
 ```
 server/
   src/
-    config/       env.ts (fail-fast env var validation), db.ts (Mongoose connect)
+    config/       env.ts (fail-fast env var validation), db.ts (cached
+                  Mongoose connect, explicit pool bounds)
     models/       User.ts, Customer.ts, Supplier.ts, Product.ts, Order.ts (placeholder —
                   see "Invoices & Shipments" below), Invoice.ts, Shipment.ts
     controllers/  auth.controller.ts, user.controller.ts, customer.controller.ts,
@@ -341,8 +342,9 @@ different domains in production.
 directly, alongside public `/register`). `User.passwordHash` has
 `select: false` in the schema, so it's excluded from query results by
 default (must opt in with `.select("+passwordHash")`, which only `login`
-does) — the Mongoose-side equivalent of the Next.js `User` class's
-"no public getter for the hash."
+does) — this is the *only* place a password hash exists anywhere in the
+system now that the Next.js-side in-memory `User` store is decommissioned
+(see "Authentication & Users" above).
 
 **Login timing:** same defense as the Next.js version — `login` compares
 against a real bcrypt hash of an unrelated string when the username
@@ -471,10 +473,14 @@ The Invoice/Shipment routes are verified the same way, including the
 through the placeholder model (no `/api/orders` route exists to create
 one through yet) and deleted again afterward. Builds and typechecks
 cleanly (`npm run typecheck && npm run build`), and fails fast with a
-clear error if `MONGODB_URI` is missing. Not yet
-wired to the Next.js frontend, which still talks to
-its own in-memory auth (see the "Status" callout above "Backend" for the
-cutover plan) — that's Task 5 in the current round of team work.
+clear error if `MONGODB_URI` is missing. **Now wired to the Next.js
+frontend** — every auth/user route proxies here (see "Authentication &
+Users" above), and the connection layer (`config/db.ts`) caches its
+connection promise with explicit pool bounds
+(`maxPoolSize`/`minPoolSize`/`serverSelectionTimeoutMS`) so it's safe to
+call on every request under both the long-running (`server.ts`) and
+serverless (`api/index.ts`) entry points. Full connection and schema
+documentation lives in [`docs/schema-diagram.md`](docs/schema-diagram.md).
 
 ## Database (Supabase, V1)
 
@@ -835,6 +841,38 @@ worked examples of the same pattern.
     the order on the list routes and only the list routes, and deleted
     all test documents (including the throwaway order) afterward. `npm
     run typecheck` and `npm run build` both clean.
+18. **Cut the frontend over to `/server` and decommissioned the Next.js
+    in-memory auth prototype**, closing out the plan described in step 14
+    and the old "Status" note under "Authentication & Users". Every
+    Next.js auth/user route (`/api/auth/login`, `/register`, `/logout`,
+    `/api/users`, `/api/users/[id]`) now proxies to the Express backend
+    server-to-server instead of touching a local repository, and
+    [`token.ts`](src/server/auth/token.ts) was rewritten from its original
+    hand-rolled/non-standard token shape to a standard 3-part HS256 JWT so
+    it verifies tokens signed by either side interchangeably. Because
+    browsers block third-party cookies, a same-origin catch-all proxy
+    ([`/api/[...path]`](<src/app/api/[...path]/route.ts>)) was added so
+    every client-side data call — not just auth — goes through the
+    frontend's own origin rather than the backend's domain directly (see
+    commit "Route client-side API calls through a same-origin proxy to
+    avoid third-party cookie blocking"). With every call-site migrated,
+    `src/repositories/UserRepository.ts`, `src/repositories/user-seed-data.ts`,
+    and the now-unused `src/server/auth/PasswordHasher.ts` were deleted —
+    confirmed via a repo-wide grep that nothing still imported them — and
+    the `User` domain class (`src/domain/User.ts`) had its now-always-empty
+    `passwordHash` field and `getPasswordHash()` removed, since a password
+    hash never reaches the Next.js side at all anymore. Also tightened
+    [`server/src/config/db.ts`](server/src/config/db.ts) with explicit
+    connection-pool bounds (`maxPoolSize: 10`, `minPoolSize: 1`,
+    `serverSelectionTimeoutMS: 10_000`) rather than relying on the
+    driver's bare defaults, and wrote
+    [`docs/schema-diagram.md`](docs/schema-diagram.md) documenting the
+    Core Connection Architecture (connection-promise caching across the
+    `server.ts`/`api/index.ts` entry points) and the User Security Schema
+    (collection schema, login/session sequence, `requireAuth`/
+    `requireAdmin` authorization flow) as Mermaid diagrams, for M3
+    sign-off. Verified with `tsc --noEmit` clean on both the Next.js app
+    and `/server` after the deletions.
 
 ## Running it
 
@@ -846,14 +884,17 @@ npm run dev     # http://localhost:3000 → redirects to /login, then /dashboard
 npm run build   # production build + typecheck
 ```
 
-Requires `AUTH_SECRET` at minimum (signs the Next.js side's session
-tokens — generate your own, see `.env.example`). Default login:
-**admin / admin@123**. The Supabase variables aren't required yet — every
-repository (including `UserRepository`) is still in-memory. A Supabase
-project's schema/seed data exists (`DB_V1.sql`, `DB_V1_Insert.sql`) ahead
-of actually wiring it up — see "Database (Supabase, V1)" and "Swapping in
-a real database" above for how that connects once a `Sql*Repository` is
-written.
+Requires `JWT_SECRET` (must match `server/.env`'s `JWT_SECRET` exactly —
+it's what lets a token signed by either side verify on the other, see
+"Authentication & Users" above) and `BACKEND_URL` (defaults to
+`http://localhost:4000`) at minimum — auth and Users won't work without
+`/server` also running (see below). Default login: **admin / admin@123**.
+The Supabase variables aren't required for auth anymore — that's fully
+MongoDB-backed now — but every *other* domain repository (orders,
+invoices, customers, ...) is still in-memory pending its own
+`Sql*Repository`/Mongo equivalent. A Supabase project's schema/seed data
+exists (`DB_V1.sql`, `DB_V1_Insert.sql`) ahead of actually wiring those up
+— see "Database (Supabase, V1)" and "Swapping in a real database" above.
 
 **Backend (Express + Mongoose):**
 
