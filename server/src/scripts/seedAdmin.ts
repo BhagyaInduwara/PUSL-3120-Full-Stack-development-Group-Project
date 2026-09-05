@@ -1,9 +1,8 @@
 /**
- * Seeds the one built-in admin account (admin / admin@123) — same
- * credentials as the Next.js in-memory UserRepository seeds today and
- * DB_V1_Insert.sql seeds into Supabase, so login works identically
- * regardless of which backend is currently wired up. Safe to re-run:
- * upserts rather than duplicating.
+ * Seeds the one built-in admin account (admin / admin@123) into MongoDB —
+ * the same credentials DB_V1_Insert.sql seeds into the (now-decommissioned)
+ * Supabase prototype, so the login is unchanged for anyone testing this app.
+ * Safe to re-run: upserts rather than duplicating.
  *
  * Run with: npm run seed
  */

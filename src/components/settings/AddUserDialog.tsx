@@ -12,7 +12,7 @@ interface AddUserDialogProps {
   onCreated: () => void;
 }
 
-/** AddUserDialog — posts straight to /api/users (never touches ERPStore/UserRepository from the client); the password never leaves this form except in that one request body. */
+/** AddUserDialog — posts straight to /api/users, which proxies to the Express/MongoDB backend; the password never leaves this form except in that one request body. */
 export function AddUserDialog({ onClose, onCreated }: AddUserDialogProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

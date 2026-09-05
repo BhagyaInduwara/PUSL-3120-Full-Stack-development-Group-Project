@@ -14,10 +14,22 @@ let connectionPromise: Promise<typeof mongoose> | null = null;
 export async function connectDB(): Promise<void> {
   if (!connectionPromise) {
     mongoose.set("strictQuery", true);
-    connectionPromise = mongoose.connect(env.mongodbUri).then((m) => {
-      console.log(`[db] connected to MongoDB (${m.connection.name})`);
-      return m;
-    });
+    connectionPromise = mongoose
+      .connect(env.mongodbUri, {
+        // Explicit pool bounds rather than the driver's bare defaults: a cap
+        // that's safe for Atlas's free/shared-tier connection limit even
+        // when several warm serverless containers each hold their own
+        // cached connection (see the comment above), and a floor so a
+        // container isn't paying a fresh-connection round trip on its next
+        // request after a quiet period.
+        maxPoolSize: 10,
+        minPoolSize: 1,
+        serverSelectionTimeoutMS: 10_000,
+      })
+      .then((m) => {
+        console.log(`[db] connected to MongoDB (${m.connection.name})`);
+        return m;
+      });
   }
   await connectionPromise;
 }

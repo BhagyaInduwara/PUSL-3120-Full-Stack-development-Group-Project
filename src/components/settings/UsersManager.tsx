@@ -30,8 +30,8 @@ const columns: Column<PublicUser>[] = [
 /**
  * UsersManager — the interactive half of Settings > Users. The page itself
  * (settings/users/page.tsx) is a Server Component that fetches `users`
- * directly from UserRepository server-side; this client component only
- * ever sees the already-public {id, username, role, createdAt} shape —
+ * server-to-server from the Express/MongoDB backend; this client component
+ * only ever sees the already-public {id, username, role, createdAt} shape —
  * password hashes never reach the browser. Non-admins see the list
  * read-only (server-checked in the page, not just a hidden button here).
  */
