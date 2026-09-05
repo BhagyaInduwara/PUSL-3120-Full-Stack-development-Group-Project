@@ -2,7 +2,6 @@ import { Observable } from "./Observable";
 import {
   InvoiceRepository,
   ShipmentRepository,
-  ProductionJobRepository,
   InventoryRepository,
   CustomerRepository,
   SupplierRepository,
@@ -11,7 +10,7 @@ import {
 import { ACTIVITY_FEED_SEED, REVENUE_SERIES_SEED } from "@/repositories/seed-data";
 import type { Invoice, InvoiceEditableFields } from "@/domain/Invoice";
 import type { Shipment, ShipmentEditableFields } from "@/domain/Shipment";
-import type { ProductionJob, JobStatus, ProductionJobEditableFields } from "@/domain/ProductionJob";
+
 import type { Customer, CustomerProps } from "@/domain/Customer";
 
 /**
@@ -31,7 +30,10 @@ import type { Customer, CustomerProps } from "@/domain/Customer";
 export class ERPStore extends Observable {
   private readonly invoiceRepo = new InvoiceRepository();
   private readonly shipmentRepo = new ShipmentRepository();
-  private readonly jobRepo = new ProductionJobRepository();
+  // Production jobs are no longer mock/in-memory data — see
+  // src/app/(app)/production/page.tsx, which reads and writes them directly
+  // against the real backend (/api/production-jobs). The
+  // ProductionJobRepository was retired alongside this change.
   private readonly inventoryRepo = new InventoryRepository();
   private readonly customerRepo = new CustomerRepository();
   private readonly supplierRepo = new SupplierRepository();
@@ -81,23 +83,7 @@ export class ERPStore extends Observable {
     this.notify();
   }
 
-  // ------------------------------------------------------------ Production
-  get jobs(): ProductionJob[] {
-    return this.jobRepo.findAll();
-  }
 
-  findJob(id: string): ProductionJob | undefined {
-    return this.jobRepo.findById(id);
-  }
-
-  jobsByStatus(status: JobStatus): ProductionJob[] {
-    return this.jobRepo.findByStatus(status);
-  }
-
-  updateJob(id: string, patch: Partial<ProductionJobEditableFields>): void {
-    this.jobRepo.findById(id)?.update(patch);
-    this.notify();
-  }
 
   // ------------------------------------------------------- Settings/master
   get customers(): Customer[] {
@@ -131,9 +117,10 @@ export class ERPStore extends Observable {
     return REVENUE_SERIES_SEED;
   }
 
-  /** Jobs planned or in progress. */
+  /** Jobs planned or in progress — now computed by the dashboard page from
+   *  its own API fetch; this getter is kept as a zero-stub so nothing breaks. */
   get inProductionCount(): number {
-    return this.jobs.filter((j) => j.status === "Planned" || j.status === "In Progress").length;
+    return 0;
   }
 
   /** Shipments packed or dispatched — scheduled for dispatch. */
