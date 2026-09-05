@@ -4,7 +4,6 @@
  * file that should change when swapping in a real database: repositories
  * read from here today, and from your API/DB client once it's wired up.
  */
-import type { InvoiceProps } from "@/domain/Invoice";
 import type { ShipmentProps } from "@/domain/Shipment";
 import type { ProductionJobProps } from "@/domain/ProductionJob";
 import type { InventoryItemProps } from "@/domain/InventoryItem";
@@ -17,15 +16,6 @@ import type { ProductProps } from "@/domain/Product";
 // directly against the real backend (/api/orders, /api/order-drafts) instead
 // of an in-memory repository. See OrderRepository's removal in this same
 // change for the rest of that retirement.
-
-export const INVOICE_SEED: InvoiceProps[] = [
-  { id: "INV-2039", number: "INV-2039", orderId: "ORD-1036", status: "Paid", issueDate: "Jul 19", dueDate: "Aug 2" },
-  { id: "INV-2041", number: "INV-2041", orderId: "ORD-1038", status: "Paid", issueDate: "Jul 26", dueDate: "Aug 9" },
-  { id: "INV-2042", number: "INV-2042", orderId: "ORD-1039", status: "Sent", issueDate: "Jul 29", dueDate: "Aug 12" },
-  { id: "INV-2043", number: "INV-2043", orderId: "ORD-1040", status: "Sent", issueDate: "Jul 31", dueDate: "Aug 14" },
-  { id: "INV-2044", number: "INV-2044", orderId: "ORD-1041", status: "Overdue", issueDate: "Jul 20", dueDate: "Aug 3" },
-  { id: "INV-2045", number: "INV-2045", orderId: "ORD-1042", status: "Draft", issueDate: "—", dueDate: "—" },
-];
 
 export const INVENTORY_SEED: InventoryItemProps[] = [
   { sku: "DSK-EXW", name: "Executive Desk – Walnut", category: "Desks", qty: 14, reorderPoint: 10 },
@@ -93,7 +83,6 @@ export const ACTIVITY_FEED_SEED: { text: string; time: string }[] = [
   { text: "ORD-1044 confirmed by Crestwood Architects", time: "Yesterday" },
 ];
 
-/** Weekly orders/revenue series behind the Dashboard bar+line chart (8 weeks, W1-W8). */
 export const REVENUE_SERIES_SEED: { week: string; revenue: number; orders: number }[] = [
   { week: "W1", revenue: 8300, orders: 14 },
   { week: "W2", revenue: 10600, orders: 17 },
