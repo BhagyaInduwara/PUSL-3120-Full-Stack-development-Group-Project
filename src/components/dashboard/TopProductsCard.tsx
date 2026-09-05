@@ -34,71 +34,78 @@ export function TopProductsCard({ products, limit = 5 }: TopProductsCardProps) {
       </div>
 
       <div className="flex flex-col gap-3">
-        {displayedProducts.map((item) => {
-          const fillPercentage = Math.round((item.units / maxUnits) * 100);
+        {displayedProducts.length === 0 ? (
+          <div className="py-8 text-center text-xs text-[var(--color-neutral-500)] border border-dashed border-[var(--color-divider)] rounded-md">
+            No sales activity recorded yet.
+          </div>
+        ) : (
 
-          return (
-            <div
-              key={item.name}
-              className="flex flex-col gap-2.5 p-3.5 rounded-lg bg-[var(--color-surface-hover)]/30 border border-[var(--color-divider)] transition-all hover:bg-[var(--color-surface-hover)]/70"
-            >
-              <div className="flex items-center justify-between gap-3 text-xs">
-                {/* Rank & Product Info */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="w-5 text-center font-mono text-[11px] text-[var(--color-neutral-500)] flex-shrink-0">
-                    #{item.rank}
-                  </span>
+          displayedProducts.map((item) => {
+            const fillPercentage = Math.round((item.units / maxUnits) * 100);
 
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-[var(--color-neutral-200)] font-normal text-xs truncate">
-                      {item.name}
+            return (
+              <div
+                key={item.name}
+                className="flex flex-col gap-2.5 p-3.5 rounded-lg bg-[var(--color-surface-hover)]/30 border border-[var(--color-divider)] transition-all hover:bg-[var(--color-surface-hover)]/70"
+              >
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  {/* Rank & Product Info */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-5 text-center font-mono text-[11px] text-[var(--color-neutral-500)] flex-shrink-0">
+                      #{item.rank}
                     </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-surface-hover)] text-[var(--color-neutral-400)] border border-[var(--color-divider)] font-normal flex-shrink-0">
-                      {item.category}
-                    </span>
+
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-[var(--color-neutral-200)] font-normal text-xs truncate">
+                        {item.name}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-surface-hover)] text-[var(--color-neutral-400)] border border-[var(--color-divider)] font-normal flex-shrink-0">
+                        {item.category}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Crisp Green / Ambient Amber Stock Indicator & Sales Figures */}
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    {/* Stock Indicator Dot + Text */}
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      {item.isLowStock ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-amber-400 inline-block shadow-[0_0_6px_rgba(251,191,36,0.5)] flex-shrink-0" />
+                          <span className="text-amber-300 font-medium">
+                            Low Stock ({item.stockQty})
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.4)] flex-shrink-0" />
+                          <span className="text-emerald-400 font-medium">
+                            In Stock ({item.stockQty})
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Volume & Revenue */}
+                    <div className="text-right font-mono text-[11px] text-[var(--color-neutral-300)]">
+                      <span>{item.units} pcs</span>
+                      <span className="text-[var(--color-neutral-500)] ml-2">({item.revenueFormatted})</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Crisp Green / Ambient Amber Stock Indicator & Sales Figures */}
-                <div className="flex items-center gap-4 flex-shrink-0">
-                  {/* Stock Indicator Dot + Text */}
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    {item.isLowStock ? (
-                      <>
-                        <span className="w-2 h-2 rounded-full bg-amber-400 inline-block shadow-[0_0_6px_rgba(251,191,36,0.5)] flex-shrink-0" />
-                        <span className="text-amber-300 font-medium">
-                          Low Stock ({item.stockQty})
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(52,211,153,0.4)] flex-shrink-0" />
-                        <span className="text-emerald-400 font-medium">
-                          In Stock ({item.stockQty})
-                        </span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Volume & Revenue */}
-                  <div className="text-right font-mono text-[11px] text-[var(--color-neutral-300)]">
-                    <span>{item.units} pcs</span>
-                    <span className="text-[var(--color-neutral-500)] ml-2">({item.revenueFormatted})</span>
-                  </div>
+                {/* Progress Bar (bounded 100% within row padding) */}
+                <div className="w-full h-1.5 rounded-full bg-[#2a2d3d] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-500 opacity-90"
+                    style={{ width: `${fillPercentage}%` }}
+                  />
                 </div>
               </div>
+            );
+          })
 
-              {/* Progress Bar (bounded 100% within row padding) */}
-              <div className="w-full h-1.5 rounded-full bg-[#2a2d3d] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[var(--color-accent)] transition-all duration-500 opacity-90"
-                  style={{ width: `${fillPercentage}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+        )}</div>
     </Card>
   );
 }
