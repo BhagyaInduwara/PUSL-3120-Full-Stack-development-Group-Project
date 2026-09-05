@@ -18,6 +18,14 @@ function scale(value: number, min: number, max: number): number {
 
 /** RevenueChart — SVG bar (revenue) + line (orders placed) chart, computed from ERPStore.revenueSeries instead of the static path in the original design. */
 export function RevenueChart({ series }: { series: RevenuePoint[] }) {
+  if (!series || series.length === 0) {
+    return (
+      <div className="h-[200px] flex flex-col items-center justify-center border border-dashed border-[var(--color-divider)] rounded-lg text-center p-4 bg-[var(--color-bg-subtle)]">
+        <p className="text-xs text-[var(--color-neutral-400)] font-medium">No revenue or order history recorded yet</p>
+        <p className="text-[11px] text-[var(--color-neutral-600)] mt-1">Data will populate automatically once sales activity begins.</p>
+      </div>
+    );
+  }
   const revenues = series.map((p) => p.revenue);
   const orders = series.map((p) => p.orders);
   const maxRevenue = Math.max(...revenues);

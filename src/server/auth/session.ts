@@ -33,7 +33,6 @@ export async function getSessionUser(): Promise<User | null> {
     id: payload.sub,
     username: payload.username,
     role: payload.role,
-    passwordHash: "",
     createdAt: new Date((payload.iat ?? Date.now() / 1000) * 1000).toISOString(),
   });
 }

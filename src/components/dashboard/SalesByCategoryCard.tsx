@@ -48,7 +48,12 @@ export function SalesByCategoryCard({ categories, totalUnits }: SalesByCategoryC
         </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] items-center gap-8 pt-1">
+      {totalUnits === 0 ? (
+        <div className="py-12 text-center text-xs text-[var(--color-neutral-500)] border border-dashed border-[var(--color-divider)] rounded-md">
+          No category sales recorded yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] items-center gap-8 pt-1">
         {/* SVG Donut Chart */}
         <div className="relative flex justify-center items-center py-2">
           <svg viewBox="0 0 180 180" width={180} height={180} className="-rotate-90 transform">
@@ -138,6 +143,7 @@ export function SalesByCategoryCard({ categories, totalUnits }: SalesByCategoryC
           ))}
         </div>
       </div>
+      )}
     </Card>
   );
 }

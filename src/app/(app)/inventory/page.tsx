@@ -8,6 +8,7 @@ import { AdjustStockModal, type AdjustStockData } from "@/components/inventory/A
 import { InventoryItem } from "@/domain/InventoryItem";
 
 import { API_URL } from "@/lib/apiUrl";
+import { fetchWithCache } from "@/lib/offline";
 
 interface ApiInventoryItem {
   _id: string;
@@ -23,27 +24,29 @@ interface FetchedInventory {
   mongoIdBySku: Record<string, string>;
 }
 
-/** Pure fetch, no setState — kept separate so the initial-load effect can set state inline (the pattern its lint rule expects) while mutation handlers reuse the same fetch logic outside any effect. */
+/** Pure fetch, no setState — uses fetchWithCache for offline resilience while mutation handlers reuse the same fetch logic. */
 async function fetchInventory(): Promise<FetchedInventory> {
-  const response = await fetch(`${API_URL}/api/inventory`, { credentials: "include" });
-  if (!response.ok) return { items: [], mongoIdBySku: {} };
+  try {
+    const { data } = await fetchWithCache<{ inventory: ApiInventoryItem[] }>(`${API_URL}/api/inventory`);
+    const apiItems = data.inventory ?? [];
 
-  const data = await response.json();
-  const apiItems = data.inventory as ApiInventoryItem[];
-
-  return {
-    items: apiItems.map(
-      (item) =>
-        new InventoryItem({
-          sku: item.sku,
-          name: item.name,
-          category: item.category,
-          qty: item.qty,
-          reorderPoint: item.reorderPoint,
-        })
-    ),
-    mongoIdBySku: Object.fromEntries(apiItems.map((item) => [item.sku, item._id])),
-  };
+    return {
+      items: apiItems.map(
+        (item) =>
+          new InventoryItem({
+            sku: item.sku,
+            name: item.name,
+            category: item.category,
+            qty: item.qty,
+            reorderPoint: item.reorderPoint,
+          })
+      ),
+      mongoIdBySku: Object.fromEntries(apiItems.map((item) => [item.sku, item._id])),
+    };
+  } catch (error) {
+    console.warn("Failed to fetch inventory:", error);
+    return { items: [], mongoIdBySku: {} };
+  }
 }
 
 export default function InventoryPage() {
