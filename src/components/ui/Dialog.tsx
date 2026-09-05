@@ -11,7 +11,7 @@ interface DialogProps {
 export function Dialog({ title, onClose, children, actions }: DialogProps) {
   return (
     <div
-      className="fixed inset-0 grid place-items-center p-[var(--space-4)] bg-[color-mix(in_srgb,var(--color-neutral-900)_50%,transparent)]"
+      className="fixed inset-0 z-50 grid place-items-center p-[var(--space-4)] bg-[color-mix(in_srgb,var(--color-neutral-900)_50%,transparent)]"
       onClick={onClose}
     >
       <div

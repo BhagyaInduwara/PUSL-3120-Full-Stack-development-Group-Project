@@ -137,29 +137,42 @@ shape, which also kept one class as the logic/state owner
 
 ## The data layer, and swapping in a real database
 
-Every repository (`src/repositories/*.ts`) implements the
+Every repository still under `src/repositories/*.ts` implements the
 [`Repository<T>`](src/repositories/Repository.ts) interface and is
-currently backed by `InMemoryRepository`, seeded from
+backed by `InMemoryRepository`, seeded from
 [`seed-data.ts`](src/repositories/seed-data.ts) (ported 1:1 from the
-`state = {...}` block in the original `.dc.html`). When the real
-database/API is available:
+`state = {...}` block in the original `.dc.html`). This was originally
+written for a hypothetical swap where a new repository class would
+implement the same interface and get injected into `ERPStore`, with
+`components/`/`app/` never needing to change because they only ever
+called `ERPStore` methods.
 
-1. Write one new class per entity that implements `Repository<T>` (e.g.
-   `SqlOrderRepository implements Repository<Order>`), calling your
-   API/DB client instead of touching an array.
-2. Swap the `new OrderRepository()` (etc.) lines in
-   [`ERPStore`](src/store/ERPStore.ts)'s field initializers for the new
-   classes — probably via constructor injection at that point, so
-   `ERPStoreProvider` can pass in real clients.
-3. Nothing in `components/` or `app/` changes, because they only ever
-   called `ERPStore` methods, never a repository directly.
+**That's not the path Order actually took, and it's worth knowing why.**
+Order (and its `IncomingOrderDraft`) were the first entity fully wired to
+the real Express + MongoDB backend (see "Backend (Express + Mongoose)"
+below) — `OrderRepository` was deleted outright, `ORDER_SEED`/
+`INCOMING_DRAFT_SEED` removed from `seed-data.ts`, and every
+Order-dependent method stripped from `ERPStore` (see its git history if
+you need the old shape) rather than reimplemented against `Repository<T>`.
+Instead, [`sales/page.tsx`](<src/app/(app)/sales/page.tsx>) talks to
+`/api/orders` and `/api/order-drafts` directly with `fetch()` — plain
+component-local `useState`/`useEffect`, no `ERPStore` involved at all.
+`useERPStore()` is not called anywhere in the app any more; `ERPStore`
+itself is dead code for every entity that's made this same jump. The
+`Repository<T>` abstraction did its job as a placeholder while the real
+backend didn't exist yet, but the actual migration turned out to be "the
+page owns its own fetches" rather than "swap the class behind the
+interface" — worth remembering before assuming any given screen still
+reads from `ERPStore`. Check whether the page does its own `fetch()`
+before touching a repository or `ERPStore` method for an entity you're
+working on.
 
 Repository mutation methods that are currently synchronous (`add`,
-`moveStatus`, `markPaid`, ...) will need to become `async` once they're
-real network calls — that ripples into `ERPStore`'s action methods and
-the components that call them (e.g. `onClick={() => store.markInvoicePaid(id)}`
-becomes an awaited call with loading state), but the shape of the
-architecture doesn't change.
+`moveStatus`, `markPaid`, ...) will need to become `async` for any
+remaining mock entity that makes this same jump — that ripples into
+`ERPStore`'s action methods and the components that call them, but by the
+time that's needed the "page calls `fetch()` directly" pattern Order
+established is probably the more likely path anyway.
 
 ## Authentication & Users
 
