@@ -5,16 +5,17 @@
  * read from here today, and from your API/DB client once it's wired up.
  */
 import type { InvoiceProps } from "@/domain/Invoice";
-import type { ProductionJobProps } from "@/domain/ProductionJob";
 import type { InventoryItemProps } from "@/domain/InventoryItem";
 import type { CustomerProps } from "@/domain/Customer";
 import type { SupplierProps } from "@/domain/Supplier";
 import type { ProductProps } from "@/domain/Product";
 
-// Orders, incoming order drafts, and shipments no longer have mock seed data
-// here — the screens (sales/page.tsx, shipments/page.tsx) read and write them
-// directly against the real backend (/api/orders, /api/shipments) instead of
-// in-memory repositories. See OrderRepository and ShipmentRepository removals.
+// Orders, incoming order drafts, shipments, and production jobs no longer
+// have mock seed data here — the screens (sales/page.tsx, shipments/page.tsx,
+// production/page.tsx) read and write them directly against the real
+// backend (/api/orders, /api/shipments, /api/production-jobs) instead of
+// in-memory repositories. See OrderRepository, ShipmentRepository, and
+// ProductionJobRepository removals.
 
 export const INVOICE_SEED: InvoiceProps[] = [
   { id: "INV-2039", number: "INV-2039", orderId: "ORD-1036", status: "Paid", issueDate: "Jul 19", dueDate: "Aug 2" },
@@ -34,16 +35,6 @@ export const INVENTORY_SEED: InventoryItemProps[] = [
   { sku: "CHR-ERG", name: "Ergonomic Chair – Black", category: "Seating", qty: 41, reorderPoint: 15 },
   { sku: "TBL-CNF", name: "Conference Table – 8ft", category: "Tables", qty: 2, reorderPoint: 4 },
   { sku: "LCK-STL", name: "Storage Locker – Steel", category: "Storage", qty: 55, reorderPoint: 20 },
-];
-
-export const JOB_SEED: ProductionJobProps[] = [
-  { id: "JOB-301", number: "JOB-301", product: "Executive Desk – Walnut", qty: 17, due: "Aug 8", status: "In Progress", progress: 65 },
-  { id: "JOB-302", number: "JOB-302", product: "Task Chair – Mesh Back", qty: 30, due: "Aug 7", status: "In Progress", progress: 40 },
-  { id: "JOB-303", number: "JOB-303", product: "Conference Table – 8ft", qty: 2, due: "Aug 12", status: "Planned" },
-  { id: "JOB-304", number: "JOB-304", product: "Storage Locker – Steel", qty: 20, due: "Aug 9", status: "Planned" },
-  { id: "JOB-305", number: "JOB-305", product: "Ergonomic Chair – Black", qty: 12, due: "Aug 6", status: "Completed" },
-  { id: "JOB-306", number: "JOB-306", product: "Reception Desk – L-Shape", qty: 3, due: "Aug 14", status: "Planned" },
-  { id: "JOB-307", number: "JOB-307", product: "3-Shelf Bookcase – Oak", qty: 10, due: "Aug 5", status: "Completed" },
 ];
 
 export const CUSTOMER_SEED: CustomerProps[] = [

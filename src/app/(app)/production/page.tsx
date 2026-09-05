@@ -10,6 +10,7 @@ import { PendingMoveBanner } from "@/components/ui/PendingMoveBanner";
 import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 
 import { API_URL } from "@/lib/apiUrl";
+import { fetchWithCache } from "@/lib/offline";
 
 interface ApiProductionJob {
   _id: string;
@@ -65,16 +66,15 @@ function toProductionJob(job: ApiProductionJob, orders: ApiOrder[] = []): Produc
 /** Pure fetch, no setState — kept separate so the initial-load effect can set state inline (the pattern its lint rule expects) while mutation handlers reuse the same fetch logic outside any effect. */
 async function fetchJobs(): Promise<ProductionJob[]> {
   try {
-    const [jobsRes, ordersRes] = await Promise.all([
-      fetch(`${API_URL}/api/production-jobs`, { credentials: "include" }),
-      fetch(`${API_URL}/api/orders`, { credentials: "include" }),
+    const [jobsResult, ordersResult] = await Promise.all([
+      fetchWithCache<{ productionJobs: ApiProductionJob[] }>(`${API_URL}/api/production-jobs`),
+      fetchWithCache<ApiOrder[]>(`${API_URL}/api/orders`),
     ]);
 
-    if (!jobsRes.ok) return [];
-    const data = await jobsRes.json();
-    const orders = ordersRes.ok ? ((await ordersRes.json()) as ApiOrder[]) : [];
+    const apiJobs = jobsResult.data?.productionJobs ?? [];
+    const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
 
-    return (data.productionJobs as ApiProductionJob[]).map((j) => toProductionJob(j, orders));
+    return apiJobs.map((j) => toProductionJob(j, orders));
   } catch (error) {
     console.error("Error fetching jobs and orders:", error);
     return [];
