@@ -1,5 +1,4 @@
 export * from "./Repository";
-export * from "./InvoiceRepository";
 export * from "./InventoryRepository";
 export * from "./CustomerRepository";
 export * from "./SupplierRepository";

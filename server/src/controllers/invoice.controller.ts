@@ -15,7 +15,7 @@ export async function listInvoices(_req: Request, res: Response): Promise<void> 
 
 /** GET /api/invoices/:id */
 export async function getInvoice(req: Request, res: Response): Promise<void> {
-  const invoice = await Invoice.findById(req.params.id);
+  const invoice = await Invoice.findById(req.params.id).populate("orderId");
   if (!invoice) {
     res.status(404).json({ error: "Invoice not found." });
     return;

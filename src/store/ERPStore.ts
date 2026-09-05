@@ -1,13 +1,11 @@
 import { Observable } from "./Observable";
 import {
-  InvoiceRepository,
   InventoryRepository,
   CustomerRepository,
   SupplierRepository,
   ProductRepository,
 } from "@/repositories";
 import { ACTIVITY_FEED_SEED, REVENUE_SERIES_SEED } from "@/repositories/seed-data";
-import type { Invoice, InvoiceEditableFields } from "@/domain/Invoice";
 import type { Customer, CustomerProps } from "@/domain/Customer";
 
 /**
@@ -25,37 +23,18 @@ import type { Customer, CustomerProps } from "@/domain/Customer";
  * is the only place that bridges it into components.
  */
 export class ERPStore extends Observable {
-  private readonly invoiceRepo = new InvoiceRepository();
   private readonly inventoryRepo = new InventoryRepository();
   private readonly customerRepo = new CustomerRepository();
   private readonly supplierRepo = new SupplierRepository();
   private readonly productRepo = new ProductRepository();
 
-  // Orders, incoming drafts, shipments, and production jobs are no longer
-  // mock/in-memory data — see sales/page.tsx, shipments/page.tsx, and
-  // production/page.tsx, which read and write them directly against the
-  // real backend (/api/orders, /api/shipments, /api/production-jobs). The
-  // ShipmentRepository and ProductionJobRepository were retired alongside
+  // Orders, incoming drafts, shipments, production jobs, and invoices are no
+  // longer mock/in-memory data — see sales/page.tsx, shipments/page.tsx,
+  // production/page.tsx, and invoicing/page.tsx, which read and write them
+  // directly against the real backend (/api/orders, /api/shipments,
+  // /api/production-jobs, /api/invoices). The ShipmentRepository,
+  // ProductionJobRepository, and InvoiceRepository were retired alongside
   // this change.
-
-  // -------------------------------------------------------------- Invoices
-  get invoices(): Invoice[] {
-    return this.invoiceRepo.findAll();
-  }
-
-  findInvoice(id: string): Invoice | undefined {
-    return this.invoiceRepo.findById(id);
-  }
-
-  markInvoicePaid(id: string): void {
-    this.invoiceRepo.findById(id)?.markPaid();
-    this.notify();
-  }
-
-  updateInvoice(id: string, patch: Partial<InvoiceEditableFields>): void {
-    this.invoiceRepo.findById(id)?.update(patch);
-    this.notify();
-  }
 
   // ------------------------------------------------------------- Inventory
   get inventory() {

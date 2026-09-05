@@ -890,9 +890,11 @@ it's what lets a token signed by either side verify on the other, see
 `http://localhost:4000`) at minimum — auth and Users won't work without
 `/server` also running (see below). Default login: **admin / admin@123**.
 The Supabase variables aren't required for auth anymore — that's fully
-MongoDB-backed now — but every *other* domain repository (orders,
-invoices, customers, ...) is still in-memory pending its own
-`Sql*Repository`/Mongo equivalent. A Supabase project's schema/seed data
+MongoDB-backed now, and orders, shipments, production jobs, and invoices
+have made the same jump (see "Swapping in a real database" above) — but
+every *other* domain repository (customers, suppliers, products, ...) is
+still in-memory pending its own `Sql*Repository`/Mongo equivalent. A
+Supabase project's schema/seed data
 exists (`DB_V1.sql`, `DB_V1_Insert.sql`) ahead of actually wiring those up
 — see "Database (Supabase, V1)" and "Swapping in a real database" above.
 
