@@ -10,9 +10,7 @@ import { Invoice, type InvoiceEditableFields, type InvoiceStatus } from "@/domai
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 
 import { API_URL } from "@/lib/apiUrl";
-
-const CACHE_KEY_INVOICES = "flowerp_cache_invoices";
-const CACHE_KEY_ORDERS = "flowerp_cache_orders";
+import { fetchWithCache } from "@/lib/offline";
 
 function fmtDate(value: string): string {
   if (!value) return value;
@@ -61,73 +59,21 @@ function toInvoice(i: ApiInvoice): Invoice {
   });
 }
 
-/** Helper to load cached data from localStorage when offline */
-function loadFromCache(): { invoices: Invoice[]; orderById: Map<string, Order> } {
-  try {
-    if (typeof window === "undefined") return { invoices: [], orderById: new Map() };
-    const cachedInvoicesJson = localStorage.getItem(CACHE_KEY_INVOICES);
-    const cachedOrdersJson = localStorage.getItem(CACHE_KEY_ORDERS);
-
-    if (!cachedInvoicesJson) return { invoices: [], orderById: new Map() };
-
-    const apiInvoices = JSON.parse(cachedInvoicesJson) as ApiInvoice[];
-    const rawOrders = cachedOrdersJson ? (JSON.parse(cachedOrdersJson) as [string, ApiOrderEmbed][]) : [];
-    
-    const orderById = new Map<string, Order>(rawOrders.map(([id, o]) => [id, toOrder(o)]));
-    const invoices = apiInvoices.map(toInvoice);
-
-    return { invoices, orderById };
-  } catch (e) {
-    console.error("Failed to load offline cache:", e);
-    return { invoices: [], orderById: new Map() };
-  }
-}
-
-/** Helper to save fetched data to localStorage for offline access */
-function saveToCache(apiInvoices: ApiInvoice[], orderByIdMap: Map<string, Order>) {
-  try {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(CACHE_KEY_INVOICES, JSON.stringify(apiInvoices));
-    
-    // Serialize Map entries for storage with a mutable copy of lineItems
-    const serializableOrders: [string, ApiOrderEmbed][] = [];
-    orderByIdMap.forEach((order, id) => {
-      serializableOrders.push([id, {
-        id: order.id,
-        number: order.number,
-        customer: order.customer,
-        lineItems: [...order.lineItems],
-        status: order.status,
-        date: order.date,
-      }]);
-    });
-    localStorage.setItem(CACHE_KEY_ORDERS, JSON.stringify(serializableOrders));
-  } catch (e) {
-    console.error("Failed to save offline cache:", e);
-  }
-}
-
+/** Fetches invoices from the API; falls back to the cached snapshot (src/lib/offline) if the request fails. */
 async function fetchInvoices(): Promise<{ invoices: Invoice[]; orderById: Map<string, Order> }> {
   try {
-    const res = await fetch(`${API_URL}/api/invoices`, { credentials: "include" });
-    if (!res.ok) throw new Error("Network response was not ok");
-    
-    const data = await res.json();
-    const apiInvoices = data.invoices as ApiInvoice[];
+    const { data } = await fetchWithCache<{ invoices: ApiInvoice[] }>(`${API_URL}/api/invoices`);
+    const apiInvoices = data.invoices;
     const orderById = new Map<string, Order>();
-    
+
     for (const i of apiInvoices) {
       if (i.order) orderById.set(i.orderId, toOrder(i.order));
     }
 
-    // Save successfully fetched data to local storage cache
-    saveToCache(apiInvoices, orderById);
-
     return { invoices: apiInvoices.map(toInvoice), orderById };
   } catch (error) {
-    // Fallback to offline cache if network fetch fails
-    console.warn("Network request failed, falling back to local cache:", error);
-    return loadFromCache();
+    console.error("Error fetching invoices (no cache available either):", error);
+    return { invoices: [], orderById: new Map() };
   }
 }
 
@@ -140,23 +86,9 @@ export default function InvoicingPage() {
 
   useEffect(() => {
     (async () => {
-      // Instantly load from cache first for zero-latency offline rendering
-      const cached = loadFromCache();
-      if (cached.invoices.length > 0) {
-        setInvoices(cached.invoices);
-        setOrderById(cached.orderById);
-      }
-
-      // Then fetch fresh data from network in background
-      try {
-        const { invoices, orderById } = await fetchInvoices();
-        if (invoices.length > 0) {
-          setInvoices(invoices);
-          setOrderById(orderById);
-        }
-      } catch (error) {
-        console.error("Error fetching invoices:", error);
-      }
+      const { invoices, orderById } = await fetchInvoices();
+      setInvoices(invoices);
+      setOrderById(orderById);
     })();
   }, []);
 

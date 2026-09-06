@@ -1,14 +1,432 @@
-# Schema Diagram — Order, IncomingOrderDraft, Shipment & Counter
-# FlowERP Backend — Connection & Auth Schema
+# FlowERP — Database Schema & Backend Architecture
 
-Scope: the Express + Mongoose backend (`/server`). Covers how it connects to
-MongoDB and how user identity/session data is shaped and secured. See the
-root [`CLAUDE.md`](../CLAUDE.md) for the rest of the architecture (domain
-layer, repositories, frontend routing) — this file only goes deep on the two
-pieces called out for M3 sign-off: the core connection and the user security
-schema.
+> **Scope:** every MongoDB/Mongoose collection behind the Express backend
+> (`/server`), how they relate, the connection layer that talks to Atlas,
+> and the auth/session design built on top of it. This file was previously
+> three separate, partially-overlapping documents pasted together across a
+> few merges (a leftover duplicate title, a system-wide ERD, and a
+> Sales/Logistics-specific ERD) — it has been consolidated into one,
+> re-verified line-by-line against the current source rather than trusted
+> from the prior versions. See root [`CLAUDE.md`](../CLAUDE.md) for the
+> rest of the architecture (domain layer, repositories, frontend routing).
+> All 13 collections below automatically get `_id: ObjectId` as their
+> primary key; `createdAt`/`updatedAt` are called out per collection since
+> three of them (`Counter`, `ActivityFeedEntry`, `RevenueSeriesPoint`)
+> deliberately don't have `{ timestamps: true }`.
 
-## 1. Core Connection Architecture
+---
+
+## 1. System-Wide Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    %% ===== Auth =====
+    User {
+        ObjectId _id PK
+        string username UK "lowercase, trimmed, min 3 chars"
+        string passwordHash "select:false, never returned by default"
+        string role "enum: admin, staff — default staff"
+        date createdAt
+        date updatedAt
+    }
+
+    %% ===== Master data =====
+    Customer {
+        ObjectId _id PK
+        string name "required, trimmed"
+        string contact
+        string email
+        string city
+        date createdAt
+        date updatedAt
+    }
+
+    Supplier {
+        ObjectId _id PK
+        string name "required, trimmed"
+        string category
+        string contact
+        string leadTime
+        date createdAt
+        date updatedAt
+    }
+
+    Product {
+        ObjectId _id PK
+        string sku UK "required, uppercased, trimmed"
+        string name "required, trimmed"
+        string category
+        number price "required, min 0"
+        date createdAt
+        date updatedAt
+    }
+
+    InventoryItem {
+        ObjectId _id PK
+        string sku UK "required"
+        string name "required"
+        string category
+        number qty "required, min 0"
+        number reorderPoint "required, min 0"
+        date createdAt
+        date updatedAt
+    }
+
+    %% ===== Sales pipeline =====
+    Order {
+        ObjectId _id PK
+        string number UK "required, app-enforced immutable"
+        string customer "free text, no FK"
+        string status "enum: Draft,Confirmed,Invoiced,Shipped,Closed"
+        date date "required"
+        number amount "virtual, computed, not stored"
+        date createdAt
+        date updatedAt
+    }
+
+    OrderLineItem {
+        ObjectId _id "auto, embedded sub-doc"
+        string product
+        number qty "required, min 1"
+        number price "required, min 0"
+    }
+
+    IncomingOrderDraft {
+        ObjectId _id PK
+        string customer
+        string emailSubject
+        date createdAt
+        date updatedAt
+    }
+
+    DraftLineItem {
+        ObjectId _id "auto, embedded sub-doc"
+        string product
+        number qty "optional, min 1"
+        number price "optional, min 0"
+    }
+
+    %% ===== Finance & logistics =====
+    Invoice {
+        ObjectId _id PK
+        string number UK "required"
+        ObjectId orderId FK "required, ref Order"
+        string status "enum: Draft,Sent,Paid,Overdue"
+        date issueDate
+        date dueDate
+        date createdAt
+        date updatedAt
+    }
+
+    Shipment {
+        ObjectId _id PK
+        string number UK "required"
+        ObjectId orderId FK "required, ref Order"
+        ObjectId invoiceId FK "optional, ref Invoice, default null"
+        string status "enum: Draft,Packed,Dispatched,Delivered"
+        date date
+        date createdAt
+        date updatedAt
+    }
+
+    %% ===== Manufacturing =====
+    ProductionJob {
+        ObjectId _id PK
+        string number UK "required"
+        string orderNumber "optional, soft link to Order.number"
+        string customer "optional, denormalized copy"
+        string product "required"
+        number qty "required, min 1"
+        date due "required"
+        string status "enum: Planned,In Progress,Completed"
+        number progress "min 0, max 100, default 0"
+        date createdAt
+        date updatedAt
+    }
+
+    %% ===== Infrastructure =====
+    Counter {
+        ObjectId _id PK
+        string key UK "required, e.g. order:2026"
+        number seq "default 0"
+    }
+
+    %% ===== Dashboard analytics (standalone) =====
+    ActivityFeedEntry {
+        ObjectId _id PK
+        string message "required"
+        date occurredAt "default now"
+    }
+
+    RevenueSeriesPoint {
+        ObjectId _id PK
+        string week "required"
+        number revenue "required"
+        number orders "required"
+        number sortOrder "required"
+    }
+
+    %% ===== Real ObjectId references (solid) =====
+    Order ||--|{ OrderLineItem : "embeds (required, non-empty array)"
+    IncomingOrderDraft ||--o{ DraftLineItem : "embeds (optional, may be empty)"
+    Invoice }o--|| Order : "orderId (ref, required)"
+    Shipment }o--|| Order : "orderId (ref, required)"
+    Shipment }o--o| Invoice : "invoiceId (ref, optional/nullable)"
+
+    %% ===== Denormalized / non-ref string matches (dotted, NOT real refs) =====
+    Counter ||..o{ Order : "generates order.number via key \"order:YYYY\" — not an ObjectId ref"
+    Counter ||..o{ Invoice : "generates invoice.number via key \"invoice:YYYY\" — not an ObjectId ref"
+    Counter ||..o{ Shipment : "generates shipment.number via key \"shipment:YYYY\" — not an ObjectId ref"
+    Counter ||..o{ ProductionJob : "generates job.number via key \"job:YYYY\" — not an ObjectId ref"
+    ProductionJob }o..o| Order : "orderNumber string matches Order.number — soft link, actively matched by frontend fallback logic, no ObjectId ref"
+    Product ||..o| InventoryItem : "sku string convention shared by both — no enforced FK, not joined anywhere in code (see §5)"
+```
+
+`Customer`, `Supplier`, and `User` are drawn with no relationship lines at
+all — that's not an omission. Confirmed by grep across every controller
+and page: `Order.customer` and `ProductionJob.customer` are free-text
+strings with zero lookup against the `Customer` collection anywhere, and
+no collection stores a `createdBy`/`userId` field pointing at `User`. See
+§5 for the full discussion of what's deliberately unlinked vs. what looks
+like it might be an accidental gap.
+
+---
+
+## 2. Relationship Reference Matrix
+
+| Source | Target | Kind | Mechanism | Notes |
+|---|---|---|---|---|
+| `Order` | `OrderLineItem` | Embedded, 1:N | Sub-document array | Custom validator rejects an empty array. |
+| `IncomingOrderDraft` | `DraftLineItem` | Embedded, 1:N | Sub-document array | No length validator — a draft can have zero line items; `POST /:id/approve` is what actually rejects an empty array, at conversion time. |
+| `Invoice` | `Order` | Reference, N:1 | `orderId: ObjectId`, `ref: "Order"`, required | Populated via `.populate("orderId")` on `listInvoices` only — `getInvoice` does **not** populate it. |
+| `Shipment` | `Order` | Reference, N:1 | `orderId: ObjectId`, `ref: "Order"`, required | Populated on every read (`list`, `get`, `create`, `update`, `dispatch`, `deliver`). |
+| `Shipment` | `Invoice` | Reference, N:1 | `invoiceId: ObjectId`, `ref: "Invoice"`, optional (`default: null`) | Populated (`number` field only) alongside `orderId`. |
+| `Counter` | `Order`, `Invoice`, `Shipment`, `ProductionJob` | Business link, not a ref | `key: String` (e.g. `"order:2026"`) read by `generateRecordNumber()` | Atomic `$inc` via `findOneAndUpdate`; no ObjectId anywhere in this relationship. |
+| `ProductionJob` | `Order` | Soft/denormalized link, not a ref | `orderNumber: String` matched against `Order.number` | Actively matched — `production/page.tsx`'s `toProductionJob()` even has fallback logic matching by product name for older records missing `orderNumber`. Renaming an order's `number` would silently orphan the link; nothing cascades. |
+| `Product` | `InventoryItem` | Naming convention only | Both use `sku` as their own unique key | **Not** enforced or joined by any code path — see the flag in §5. |
+
+---
+
+## 3. Field-by-field schema reference
+
+### 3.1 Auth
+
+**`User`** (`server/src/models/User.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `username` | `String` | **Required, unique**, trimmed, lowercased, `minlength: 3`. |
+| `passwordHash` | `String` | **Required**, `select: false` — excluded from every query unless `.select("+passwordHash")` is used explicitly (only `login()` does). |
+| `role` | `String` | Enum: `admin`, `staff`. Default `"staff"`. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+### 3.2 Master data
+
+**`Customer`** (`server/src/models/Customer.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | `String` | **Required**, trimmed. |
+| `contact` | `String` | Optional, trimmed. |
+| `email` | `String` | Optional, trimmed. No format validation. |
+| `city` | `String` | Optional, trimmed. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+**`Supplier`** (`server/src/models/Supplier.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | `String` | **Required**, trimmed. |
+| `category` | `String` | Optional, trimmed. |
+| `contact` | `String` | Optional, trimmed. |
+| `leadTime` | `String` | Optional, trimmed free text (e.g. `"2 weeks"`). |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+**`Product`** (`server/src/models/Product.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `sku` | `String` | **Required, unique**, trimmed, **uppercased automatically** by the schema. |
+| `name` | `String` | **Required**, trimmed. |
+| `category` | `String` | Optional, trimmed. |
+| `price` | `Number` | **Required**, `min: 0`. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+**`InventoryItem`** (`server/src/models/InventoryItem.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `sku` | `String` | **Required, unique**. No trim/uppercase transform, unlike `Product.sku` — see §5, this is one reason the two can drift apart (`"chr-001"` here vs `"CHR-001"` on `Product` would never collide as duplicates of each other). |
+| `name` | `String` | **Required**. |
+| `category` | `String` | Optional. |
+| `qty` | `Number` | **Required**, `min: 0`. |
+| `reorderPoint` | `Number` | **Required**, `min: 0`. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+### 3.3 Sales pipeline
+
+**`Order`** (`server/src/models/Order.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `number` | `String` | **Required, unique**. Assigned once via `generateRecordNumber("order", …)`; `updateOrder` strips any client-supplied `number` from `PUT` bodies, so it's immutable in practice — not a schema-level constraint. |
+| `customer` | `String` | Trimmed. Free text — no reference to `Customer` anywhere in the code (see §5). |
+| `lineItems` | `[OrderLineItem]` | Embedded array. Custom validator **rejects an empty array** ("An order must have at least one line item."). |
+| `status` | `String` | Enum: `Draft`, `Confirmed`, `Invoiced`, `Shipped`, `Closed`. Default `"Draft"`. |
+| `date` | `Date` | **Required**. |
+| `amount` | `Number` (virtual) | **Not stored** — computed on read as `Σ(qty × price)` across `lineItems`, exposed via `toJSON`/`toObject` virtuals. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+**`OrderLineItem`** — embedded sub-schema, not its own collection.
+
+| Field | Type | Notes |
+|---|---|---|
+| `product` | `String` | Trimmed. |
+| `qty` | `Number` | **Required**, `min: 1`. |
+| `price` | `Number` | **Required**, `min: 0`. |
+
+**`IncomingOrderDraft`** (`server/src/models/IncomingOrderDraft.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `customer` | `String` | Optional, trimmed. |
+| `emailSubject` | `String` | Optional, trimmed — subject line of the parsed inbound email. |
+| `lineItems` | `[DraftLineItem]` | Embedded array — **no non-empty validator**, unlike `Order.lineItems`. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+**`DraftLineItem`** — embedded sub-schema.
+
+| Field | Type | Notes |
+|---|---|---|
+| `product` | `String` | Trimmed. |
+| `qty` | `Number` | Optional, `min: 1` — **not required**, unlike `OrderLineItem.qty`. |
+| `price` | `Number` | Optional, `min: 0` — **not required**. |
+
+### 3.4 Finance & logistics
+
+**`Invoice`** (`server/src/models/Invoice.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `number` | `String` | **Required, unique**. |
+| `orderId` | `ObjectId` | **Required**, `ref: "Order"`. |
+| `status` | `String` | Enum: `Draft`, `Sent`, `Paid`, `Overdue`. Default `"Draft"`. |
+| `issueDate` | `Date` | Optional. |
+| `dueDate` | `Date` | Optional. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+**`Shipment`** (`server/src/models/Shipment.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `number` | `String` | **Required, unique**. |
+| `orderId` | `ObjectId` | **Required**, `ref: "Order"`. |
+| `invoiceId` | `ObjectId` | Optional, `ref: "Invoice"`, `default: null`. |
+| `status` | `String` | Enum: `Draft`, `Packed`, `Dispatched`, `Delivered`. Default `"Draft"`. |
+| `date` | `Date` | Optional. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+### 3.5 Manufacturing
+
+**`ProductionJob`** (`server/src/models/ProductionJob.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `number` | `String` | **Required, unique**. |
+| `orderNumber` | `String` | Optional. **Not a Mongo `ref`** — a soft string match against `Order.number`, resolved client-side. |
+| `customer` | `String` | Optional. Denormalized copy of the linked order's `customer` string — itself free text, not a `Customer` reference. |
+| `product` | `String` | **Required**. Free text — not validated against `Product.name` anywhere in the code (the earlier version of this doc claimed it "matches a `Product.name`"; that was never actually enforced). |
+| `qty` | `Number` | **Required**, `min: 1`. |
+| `due` | `Date` | **Required**. |
+| `status` | `String` | Enum: `Planned`, `In Progress`, `Completed`. Default `"Planned"`. |
+| `progress` | `Number` | `min: 0`, `max: 100`, default `0`. Only semantically meaningful while `status === "In Progress"`. |
+| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
+
+### 3.6 Infrastructure
+
+**`Counter`** (`server/src/models/Counter.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `key` | `String` | **Required, unique**. One document per (record type, year) — e.g. `"order:2026"`, `"invoice:2026"`, `"shipment:2026"`, `"job:2026"`. |
+| `seq` | `Number` | Default `0`; incremented atomically via `findOneAndUpdate({..}, {$inc:{seq:1}}, {upsert:true})`. |
+| — | — | **No `{ timestamps: true }`** — this schema has neither `createdAt` nor `updatedAt`. (The previous version of this doc incorrectly listed both; corrected here.) |
+
+### 3.7 Dashboard analytics
+
+**`ActivityFeedEntry`** (`server/src/models/Dashboard.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `message` | `String` | **Required**. |
+| `occurredAt` | `Date` | Default `Date.now`. |
+| — | — | **No `{ timestamps: true }`** on this schema either — no `createdAt`/`updatedAt`. |
+
+**`RevenueSeriesPoint`** (`server/src/models/Dashboard.ts`)
+
+| Field | Type | Notes |
+|---|---|---|
+| `week` | `String` | **Required**. |
+| `revenue` | `Number` | **Required**. |
+| `orders` | `Number` | **Required**. |
+| `sortOrder` | `Number` | **Required**. |
+| — | — | **No `{ timestamps: true }`**. |
+
+---
+
+## 4. What's deliberately unlinked
+
+`Customer` and `Supplier` are never referenced by anything, by design —
+`Order.customer` and `ProductionJob.customer` are plain free-text strings.
+This matches the project's documented direction (`CLAUDE.md`, "Design
+choices carried over from the domain layer"): the domain model treats
+`Order.customer` as a string today on purpose, with a real foreign key
+called out explicitly as a *future* tightening, not an oversight. `User`
+is likewise fully decoupled from every business collection — nothing
+stores a `createdBy`/`userId`, so authentication carries no weight over
+what any given user has touched.
+
+## 5. ⚠️ Flag before submission: `Product` vs. `InventoryItem`
+
+`Product` and `InventoryItem` have near-identical shapes (`sku`, `name`,
+`category` on both) but are two fully independent collections with **zero**
+referential integrity between them, confirmed directly from
+`product.controller.ts` and `inventory.controller.ts`:
+
+- Creating a `Product` does not create a matching `InventoryItem`, and
+  vice versa.
+- Editing a `Product`'s `name`/`category` does not touch the corresponding
+  `InventoryItem` row.
+- `Product.sku` is trimmed and uppercased by the schema; `InventoryItem.sku`
+  is not transformed at all — so the "same" SKU typed in lowercase on one
+  side and uppercase on the other would be treated as two unrelated items
+  by both collections' own uniqueness constraints, while looking identical
+  to a person reading the UI.
+- Nothing in either controller ever runs a `findOne` against the other
+  collection — the "relationship" is a naming convention the team is
+  trusting people to maintain by hand, not something the schema or API
+  enforces.
+
+This looks like the same real-world entity (a catalog item) modeled twice
+for two different concerns (pricing/catalog vs. warehouse stock count)
+without the join logic to keep them in sync. Worth a deliberate decision —
+either give `InventoryItem` a real `productId: ObjectId` ref, or explicitly
+document that the two are allowed to drift — before this goes into the
+final submission, rather than leaving it looking like an oversight.
+
+**Smaller note, same family of issue:** `Shipment.canEdit` in the Next.js
+domain layer (`src/domain/Shipment.ts`) blocks editing once
+`status === "Delivered"` — but that's a **frontend-only** check. The
+backend's `PUT /api/shipments/:id` has no equivalent status guard, so a
+direct API call (curl, Postman, or a bug in some other client) can still
+modify a `Delivered` shipment. The previous version of this document
+described this as the API "locking the shipment from further
+modification," which overstated what's actually enforced server-side —
+worth knowing before claiming this as tested backend behavior.
+
+---
+
+## 6. Core Connection Architecture
 
 **Files:** [`server/src/config/env.ts`](../server/src/config/env.ts),
 [`server/src/config/db.ts`](../server/src/config/db.ts),
@@ -43,27 +461,25 @@ than once. Caching the `Promise<typeof mongoose>` — not only the resolved
 connection — means a burst of concurrent requests arriving while the first
 connection is still being established all await the *same* in-flight
 connect, instead of racing to open several. A cold container opens one
-connection; a warm container reuses it for free. Without this, a naive
-"connect on every request" implementation would exhaust Atlas's connection
-limit almost immediately under any real concurrency.
+connection; a warm container reuses it for free.
 
 **Pool sizing rationale:** `maxPoolSize: 10` keeps any single warm container
 well under Atlas's free/shared-tier connection ceiling even when several
-containers are warm at once; `minPoolSize: 1` avoids paying a fresh-TCP+TLS
-handshake on the first request after a quiet period.
+containers are warm at once; `minPoolSize: 1` avoids paying a fresh
+TCP+TLS handshake on the first request after a quiet period.
 `serverSelectionTimeoutMS: 10_000` turns a misconfigured/unreachable
 `MONGODB_URI` into a clear timeout error within 10s instead of a request
 that hangs indefinitely.
 
-**Fail-fast env validation:** `env.ts` is the *only* file allowed to touch
-`process.env` directly (see its own header comment) — every required
-variable is read through `required(name)`, which throws immediately at
-import time if it's missing. This means a missing `MONGODB_URI` or
-`JWT_SECRET` crashes the process at startup with a message telling you to
-copy `.env.example`, rather than surfacing as an opaque error the first time
-a route handler happens to touch the database or sign a token.
+**Fail-fast env validation:** `env.ts` is the only file allowed to touch
+`process.env` directly — every required variable is read through
+`required(name)`, which throws immediately at import time if it's
+missing, so a missing `MONGODB_URI`/`JWT_SECRET` crashes at startup with a
+clear message rather than surfacing deep inside a request handler.
 
-## 2. User Security Schema
+---
+
+## 7. User Security Schema
 
 **Files:** [`server/src/models/User.ts`](../server/src/models/User.ts)
 (schema), [`server/src/controllers/auth.controller.ts`](../server/src/controllers/auth.controller.ts)
@@ -71,28 +487,16 @@ a route handler happens to touch the database or sign a token.
 [`server/src/utils/passwordHasher.ts`](../server/src/utils/passwordHasher.ts)
 (bcrypt), [`server/src/utils/jwt.ts`](../server/src/utils/jwt.ts) (sign/verify),
 [`server/src/middleware/auth.ts`](../server/src/middleware/auth.ts)
-(`requireAuth`, `requireAdmin`).
+(`requireAuth`, `requireAdmin`). Field-by-field schema is in §3.1.
 
-### 2.1 `User` collection schema
+`select: false` on `passwordHash` is the schema-level guarantee that a
+hash can never leak through an ordinary `User.find()`/`findById()` — the
+only place in the whole backend that adds `.select("+passwordHash")` is
+`login()`. Every response goes through `toPublicUser()`, which reads only
+`{ id, username, role, createdAt }` — structurally incapable of including
+the hash.
 
-| Field | Type | Constraints |
-|---|---|---|
-| `_id` | ObjectId | default Mongo id (not a custom string id — see `CLAUDE.md` "Master data") |
-| `username` | String | `required`, `unique`, `trim`, `lowercase`, `minlength: 3` |
-| `passwordHash` | String | `required`, **`select: false`** — excluded from every query result unless a call explicitly opts in with `.select("+passwordHash")` |
-| `role` | String enum | `"admin" \| "staff"`, `default: "staff"` |
-| `createdAt` / `updatedAt` | Date | from `{ timestamps: true }` |
-
-`select: false` is the schema-level guarantee that a password hash can never
-leak through an ordinary `User.find()`/`findById()` — the *only* place in
-the whole backend that adds `.select("+passwordHash")` is `login()`, right
-where it's needed to compare a submitted password. Every response ever sent
-to a client goes through `toPublicUser()`, which reads only
-`{ id, username, role, createdAt }` off the document — structurally
-incapable of including the hash, the same encapsulation pattern the
-Next.js-side `User` domain class used before decommissioning (see §3).
-
-### 2.2 Request → response flow
+### 7.1 Request → response flow
 
 ```mermaid
 sequenceDiagram
@@ -117,20 +521,16 @@ sequenceDiagram
     end
 ```
 
-**Why the cookie gets re-set by the Next.js route instead of passed through
-untouched:** the browser only ever talks to the frontend's own origin.
-Setting a cookie on the *backend's* origin directly (a true cross-origin
-`fetch`) is silently dropped by modern browsers' third-party-cookie
-blocking regardless of `SameSite`/`Secure` configuration — see
+The cookie gets re-set by the Next.js route rather than passed through
+untouched because modern browsers block third-party cookies — a cookie
+set by the backend's own domain while browsing the frontend's domain is
+silently dropped, regardless of `SameSite`/`Secure`. See
 [`src/app/api/[...path]/route.ts`](../src/app/api/%5B...path%5D/route.ts)'s
-own comment for the full story. So every client-side call, auth included,
-goes through a same-origin Next.js route that forwards to Express
-server-to-server and re-issues the identical JWT as a same-origin cookie.
-Both sides sign/verify with the same `JWT_SECRET` and the same
-`flowerp_token` cookie name, so the token itself is unchanged — only which
-origin's cookie jar holds it changes.
+own comment for the full story. Both sides sign/verify with the same
+`JWT_SECRET` and the same `flowerp_token` cookie name, so the token itself
+is unchanged — only which origin's cookie jar holds it changes.
 
-### 2.3 Authorization checks
+### 7.2 Authorization checks
 
 ```mermaid
 flowchart LR
@@ -145,503 +545,27 @@ flowchart LR
 ```
 
 `requireAuth` verifies the JWT's signature/expiry via `jsonwebtoken.verify`
-against `env.jwtSecret` — it never touches MongoDB, so an authorization
-check costs one HMAC verification, not a database round trip. `requireAdmin`
-only ever runs after `requireAuth` and reads the role straight off the
-already-verified token claims. Role changes therefore take effect on that
-user's *next login*, not instantly — the trade-off documented for the
-Next.js prototype's hand-rolled tokens in `CLAUDE.md` applies identically
-here: no server-side session store means no way to revoke or upgrade a role
-mid-session, acceptable for this project's scale.
+— it never touches MongoDB, so an authorization check costs one HMAC
+verification, not a database round trip. `requireAdmin` reads the role
+straight off the already-verified token claims, so a role change takes
+effect on that user's *next login*, not instantly — there's no
+server-side session store to revoke or upgrade a role mid-session,
+acceptable at this project's scale.
 
-### 2.4 Timing-safe login
+### 7.3 Timing-safe login
 
 `login()` always calls `bcrypt.compare()` — against the real hash if the
-user exists, against a fixed dummy bcrypt hash (`DUMMY_HASH`) if they don't
-— before ever returning 401. Skipping the compare on a missing user would
-make "no such user" measurably faster than "wrong password," which is
-enough of a timing signal to enumerate valid usernames; always paying the
-bcrypt cost closes that gap.
-
-## 3. Decommissioned: Next.js in-memory `UserRepository`
-
-Earlier in this project, `src/repositories/UserRepository.ts` and
-`src/repositories/user-seed-data.ts` held an in-memory, array-backed `User`
-store used by the Next.js app's own prototype auth routes, built to
-validate the auth *design* (session tokens, `canEdit`-style encapsulation,
-route protection) ahead of the mandated Express/Mongoose backend existing.
-
-That cutover is now complete: every Next.js auth/user route
-(`/api/auth/login`, `/api/auth/register`, `/api/auth/logout`,
-`/api/users`, `/api/users/[id]`, and the `settings/users` Server Component)
-proxies to this Express backend server-to-server rather than reading its
-own array, and the Next.js and Express sides share one JWT format (standard
-3-part HS256, same `JWT_SECRET`, same `flowerp_token` cookie name) so a
-token signed by either side verifies on the other. With nothing left
-importing them, `UserRepository.ts`, `user-seed-data.ts`, and the Next.js
-side's now-unused `PasswordHasher.ts` (bcrypt wrapper — password hashing
-happens exclusively in MongoDB-land now, via
-`server/src/utils/passwordHasher.ts`) were deleted. Auth and role checks
-are 100% MongoDB-backed, per §2 above.
-# FlowERP — Master Database Architecture & System-Wide ERD
-
-> **Scope:** Consolidated system-wide Entity-Relationship Diagram (ERD) and technical schema specifications for all 12 MongoDB/Mongoose models (13 collections) across FlowERP. All models automatically include `_id: ObjectId` and `{ timestamps: true }` (`createdAt`, `updatedAt`) unless noted otherwise.
+user exists, against a fixed dummy bcrypt hash (`DUMMY_HASH`) if they
+don't — before ever returning 401, so "no such user" and "wrong password"
+take roughly the same time and can't be used to enumerate usernames.
 
 ---
 
-## 1. System-Wide Entity-Relationship Diagram (ERD)
-
-```mermaid
-erDiagram
-    User {
-        ObjectId _id PK
-        string username UK
-        string passwordHash
-        string role
-    }
-    Customer {
-        ObjectId _id PK
-        string name
-        string contact
-        string email
-        string city
-    }
-    Supplier {
-        ObjectId _id PK
-        string name
-        string category
-        string contact
-        string leadTime
-    }
-    Product {
-        ObjectId _id PK
-        string sku UK
-        string name
-        string category
-        number price
-    }
-    InventoryItem {
-        ObjectId _id PK
-        string sku UK
-        string name
-        string category
-        number qty
-        number reorderPoint
-    }
-    Order {
-        ObjectId _id PK
-        string number UK
-        string customer
-        string status
-        date date
-        number amount "virtual"
-    }
-    OrderLineItem {
-        ObjectId _id PK
-        string product
-        number qty
-        number price
-    }
-    IncomingOrderDraft {
-        ObjectId _id PK
-        string customer
-        string emailSubject
-    }
-    DraftLineItem {
-        ObjectId _id PK
-        string product
-        number qty
-        number price
-    }
-    Invoice {
-        ObjectId _id PK
-        string number UK
-        ObjectId orderId FK
-        string status
-        date issueDate
-        date dueDate
-    }
-    Shipment {
-        ObjectId _id PK
-        string number UK
-        ObjectId orderId FK
-        ObjectId invoiceId FK
-        string status
-        date date
-    }
-    ProductionJob {
-        ObjectId _id PK
-        string number UK
-        string orderNumber
-        string customer
-        string product
-        number qty
-        date due
-        string status
-        number progress
-    }
-    Counter {
-        ObjectId _id PK
-        string key UK
-        number seq
-    }
-    ActivityFeedEntry {
-        ObjectId _id PK
-        string message
-        date occurredAt
-    }
-    RevenueSeriesPoint {
-        ObjectId _id PK
-        string week
-        number revenue
-        number orders
-        number sortOrder
-    }
-
-    Order ||--|{ OrderLineItem : "embeds lineItems"
-    IncomingOrderDraft ||--|{ DraftLineItem : "embeds lineItems"
-    Invoice }o--|| Order : "references orderId (ObjectId)"
-    Shipment }o--|| Order : "references orderId (ObjectId)"
-    Shipment }o--o| Invoice : "optional invoiceId (ObjectId)"
-    ProductionJob }o--o| Order : "Make-to-Order link (orderNumber)"
-    Product ||--|| InventoryItem : "corresponds by sku"
-    Counter ||..o{ Order : "generates ORD numbers"
-    Counter ||..o{ Invoice : "generates INV numbers"
-    Counter ||..o{ Shipment : "generates SHP numbers"
-    Counter ||..o{ ProductionJob : "generates JOB numbers"
-```
-
----
-
-## 2. Relationships & Reference Matrix
-
-| Source Entity | Target Entity | Relationship Type | Key / Mechanism | Behavior & Notes |
-|---|---|---|---|---|
-| `Order` | `OrderLineItem` | **1 : N (Embedded)** | Embedded subdocuments array | Line items have no independent existence; validated with at least 1 item. |
-| `IncomingOrderDraft` | `DraftLineItem` | **1 : N (Embedded)** | Embedded subdocuments array | Permissive schema for unverified inbound email parsing. |
-| `Invoice` | `Order` | **N : 1 (Reference)** | `orderId: ObjectId` (`ref: "Order"`) | Hydrated on read via Mongoose `.populate("orderId")`. |
-| `Shipment` | `Order` | **N : 1 (Reference)** | `orderId: ObjectId` (`ref: "Order"`) | Associates freight manifests with the source sales order. |
-| `Shipment` | `Invoice` | **N : 1 (Reference)** | `invoiceId: ObjectId` (`ref: "Invoice"`) | Optional reference (`default: null`); tracks commercial invoice pairing. |
-| `ProductionJob` | `Order` | **N : 1 (Business Link)** | `orderNumber: String` | String reference supporting Make-to-Order traceability from shop floor to order. |
-| `Product` | `InventoryItem` | **1 : 1 (Business Link)** | `sku: String` | Matches catalog product with warehouse physical bin stock. |
-| `Counter` | `Order`, `Invoice`, `Shipment`, `Job` | **1 : N (Sequence Generator)** | `key: String` (e.g. `"order:2026"`) | Atomic `$inc` via `findOneAndUpdate` ensuring gapless, collision-free numbers. |
-
----
-
-## 3. Schema Specifications by Domain
-
-### 3.1 Auth & Access Control
-* **`User`** (`server/src/models/User.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `username` | `String` | Required, unique, trimmed, lowercase, minlength: 3. |
-  | `passwordHash` | `String` | Required, `select: false` (hidden from default queries). |
-  | `role` | `String` | Enum: `["admin", "staff"]`, default: `"staff"`. |
-
----
-
-### 3.2 Master Data & Warehouse
-* **`Product`** (`server/src/models/Product.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `sku` | `String` | Required, unique, trimmed, uppercase (e.g. `"CHAIR-001"`). |
-  | `name` | `String` | Required, trimmed commercial item name. |
-  | `category` | `String` | Trimmed category grouping (`Seating`, `Storage`, `Desks`, `Tables`). |
-  | `price` | `Number` | Required, `min: 0` (USD unit selling price). |
-
-* **`InventoryItem`** (`server/src/models/InventoryItem.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `sku` | `String` | Required, unique; corresponds to `Product.sku`. |
-  | `name` | `String` | Required inventory item name. |
-  | `category` | `String` | Optional category classification. |
-  | `qty` | `Number` | Required, `min: 0` (current physical stock count). |
-  | `reorderPoint` | `Number` | Required, `min: 0` (threshold flagging low stock). |
-
-* **`Customer`** (`server/src/models/Customer.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `name` | `String` | Required, trimmed company or individual name. |
-  | `contact` | `String` | Trimmed primary contact person. |
-  | `email` | `String` | Trimmed email address. |
-  | `city` | `String` | Trimmed location city. |
-
-* **`Supplier`** (`server/src/models/Supplier.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `name` | `String` | Required, trimmed vendor business name. |
-  | `category` | `String` | Trimmed supply category (`Hardware`, `Wood`, `Textiles`). |
-  | `contact` | `String` | Trimmed phone / email contact. |
-  | `leadTime` | `String` | Trimmed standard delivery lead time (e.g. `"2 weeks"`). |
-
----
-
-### 3.3 Sales Pipeline & Order Intake
-* **`Order`** (`server/src/models/Order.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `number` | `String` | Required, unique, immutable display ID (`ORD-YYYY/MM/DD/AXXX`). |
-  | `customer` | `String` | Trimmed customer name. |
-  | `lineItems` | `[OrderLineItem]` | Embedded array; custom validator requires at least 1 item. |
-  | `status` | `String` | Enum: `["Draft", "Confirmed", "Invoiced", "Shipped", "Closed"]`, default: `"Draft"`. |
-  | `date` | `Date` | Required order placement date. |
-  | `amount` | `Number` *(virtual)* | Computed on read via `Σ (qty × price)`. Not stored in DB. |
-
-  * **`OrderLineItem`** (Embedded): `product` (string, trimmed), `qty` (number, required, min: 1), `price` (number, required, min: 0).
-
-* **`IncomingOrderDraft`** (`server/src/models/IncomingOrderDraft.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `customer` | `String` | Trimmed candidate customer name. |
-  | `emailSubject` | `String` | Trimmed inbound email subject line. |
-  | `lineItems` | `[DraftLineItem]` | Embedded array of candidate lines (fields optional during review). |
-
----
-
-### 3.4 Operations & Manufacturing
-* **`Invoice`** (`server/src/models/Invoice.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `number` | `String` | Required, unique display ID (`INV-YYYY/MM/DD/AXXX`). |
-  | `orderId` | `ObjectId` | Required foreign reference (`ref: "Order"`). |
-  | `status` | `String` | Enum: `["Draft", "Sent", "Paid", "Overdue"]`, default: `"Draft"`. |
-  | `issueDate` | `Date` | Optional invoice billing date. |
-  | `dueDate` | `Date` | Optional invoice payment due date. |
-
-* **`Shipment`** (`server/src/models/Shipment.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `number` | `String` | Required, unique display ID (`SHP-YYYY/MM/DD/AXXX`). |
-  | `orderId` | `ObjectId` | Required foreign reference (`ref: "Order"`). |
-  | `invoiceId` | `ObjectId` | Optional foreign reference (`ref: "Invoice"`, default: null). |
-  | `status` | `String` | Enum: `["Draft", "Packed", "Dispatched", "Delivered"]`, default: `"Draft"`. |
-  | `date` | `Date` | Optional dispatch/delivery date. |
-
-* **`ProductionJob`** (`server/src/models/ProductionJob.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `number` | `String` | Required, unique display ID (`JOB-YYYY/MM/DD/AXXX`). |
-  | `orderNumber` | `String` | Optional Make-to-Order link to `Order.number`. |
-  | `customer` | `String` | Optional destination customer name. |
-  | `product` | `String` | Required manufactured product name. |
-  | `qty` | `Number` | Required, `min: 1` units to produce. |
-  | `due` | `Date` | Required manufacturing due date. |
-  | `status` | `String` | Enum: `["Planned", "In Progress", "Completed"]`, default: `"Planned"`. |
-  | `progress` | `Number` | `min: 0`, `max: 100`, default: `0` (percentage complete). |
-
----
-
-### 3.5 Atomic Numbering & Dashboard Analytics
-* **`Counter`** (`server/src/models/Counter.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `key` | `String` | Required, unique partition key (e.g. `"order:2026"`, `"invoice:2026"`). |
-  | `seq` | `Number` | Default: `0`; incremented atomically via `$inc` in `findOneAndUpdate`. |
-
-* **`ActivityFeedEntry`** (`server/src/models/Dashboard.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `message` | `String` | Required audit message (e.g. `"ORD-1041 moved to Invoiced"`). |
-  | `occurredAt` | `Date` | Default: `Date.now`. |
-
-* **`RevenueSeriesPoint`** (`server/src/models/Dashboard.ts`):
-  | Field | Type | Rules & Constraints |
-  |---|---|---|
-  | `week` | `String` | Required weekly bucket identifier (e.g. `"W1"` through `"W8"`). |
-  | `revenue` | `Number` | Required gross revenue amount in USD. |
-  | `orders` | `Number` | Required order count for that week. |
-  | `sortOrder` | `Number` | Required integer (1–8) for chronological graph display. |
-
----
-
-## 4. Indexing & Query Optimization Strategy
-
-| Collection | Indexed Field(s) | Type | Rationale |
-|---|---|---|---|
-| `users` | `username: 1` | Unique | Enforces unique usernames and optimizes login authentication. |
-| `products` | `sku: 1` | Unique | Enforces catalog item uniqueness across the platform. |
-| `inventoryitems` | `sku: 1` | Unique | Fast warehouse lookups and 1:1 sync with `Product.sku`. |
-| `orders` | `number: 1` | Unique | Fast lookup and duplicate prevention for business order IDs. |
-| `invoices` | `number: 1` | Unique | Prevents duplicate invoice issuance numbers. |
-| `invoices` | `orderId: 1` | Foreign Key | Accelerates `.populate("orderId")` relational lookups. |
-| `shipments` | `number: 1` | Unique | Prevents duplicate freight manifest numbers. |
-| `shipments` | `orderId: 1` | Foreign Key | Fast lookups for order delivery status. |
-| `productionjobs`| `number: 1` | Unique | Guarantees unique job tracking IDs on the shop floor. |
-| `counters` | `key: 1` | Unique | Required for atomic upsert increments in `findOneAndUpdate`. |
-# Schema Diagram — Order, IncomingOrderDraft & Counter
-
-> **Scope:** the MongoDB/Mongoose schemas behind the Sales & Logistics
-> modules: [`Order.ts`](../server/src/models/Order.ts),
-> [`IncomingOrderDraft.ts`](../server/src/models/IncomingOrderDraft.ts),
-> [`Shipment.ts`](../server/src/models/Shipment.ts), and
-> [`Counter.ts`](../server/src/models/Counter.ts). See
-> [`srcdesign.md`](./srcdesign.md) for the REST conventions these schemas'
-> endpoints follow, and `CLAUDE.md` for how the rest of the backend fits
-> together.
-
-## 1. How the schemas relate
-
-```mermaid
-erDiagram
-    IncomingOrderDraft ||--o{ DraftLineItem : embeds
-    Order ||--o{ OrderLineItem : embeds
-    Order ||--o{ Shipment : "fulfilled by (orderId)"
-    Invoice ||--o{ Shipment : "billed with (invoiceId)"
-    Counter ||..o{ Order : "hands out order.number (ORD-...)"
-    Counter ||..o{ Shipment : "hands out shipment.number (SHP-...)"
-
-    IncomingOrderDraft {
-        ObjectId _id
-        string customer
-        string emailSubject
-        DraftLineItem[] lineItems
-        Date createdAt
-        Date updatedAt
-    }
-    DraftLineItem {
-        ObjectId _id
-        string product
-        number qty "optional, unlike Order's"
-        number price "optional, unlike Order's"
-    }
-    Order {
-        ObjectId _id
-        string number "unique, e.g. ORD-2026/09/01/A016"
-        string customer
-        OrderLineItem[] lineItems
-        string status "Draft|Confirmed|Invoiced|Shipped|Closed"
-        Date date
-        number amount "virtual, not stored"
-        Date createdAt
-        Date updatedAt
-    }
-    OrderLineItem {
-        ObjectId _id
-        string product
-        number qty "required, >= 1"
-        number price "required, >= 0"
-    }
-    Shipment {
-        ObjectId _id
-        string number "unique, e.g. SHP-2026/09/03/A001"
-        ObjectId orderId "required, ref: Order"
-        ObjectId invoiceId "optional, ref: Invoice"
-        string status "Draft|Packed|Dispatched|Delivered"
-        Date date
-        Date createdAt
-        Date updatedAt
-    }
-    Counter {
-        ObjectId _id
-        string key "unique, e.g. order:2026, shipment:2026"
-        number seq
-    }
-```
-
-**The business lifecycle supported across these schemas:**
-
-1. Inbound demand is parsed into an **`IncomingOrderDraft`**.
-2. When approved, it becomes a **`Confirmed Order`** with an auto-assigned `ORD-...` number.
-3. Once manufacturing completes and goods are ready for courier distribution, a **`Shipment`** is generated with dual references:
-   - `orderId`: Identifies the exact customer, goods, and quantities being delivered.
-   - `invoiceId`: Identifies the linked invoice/billing record (or `null` if shipped prior to invoice generation).
-4. The shipment moves through the 4-stage logistics lifecycle:
-   $$\text{Draft} \longrightarrow \text{Packed} \longrightarrow \text{Dispatched} \longrightarrow \text{Delivered}$$
-5. Both `Order` and `Shipment` draw human-readable identifiers atomically from the shared **`Counter`** collection (`ORD-...` and `SHP-...`).
-
----
-
-## 2. `Order`
-
-| Field | Type | Notes |
-|---|---|---|
-| `number` | `String` | Required, **unique**. Human-readable id, e.g. `ORD-2026/09/01/A016` — see §5. Assigned once at creation; immutable after. |
-| `customer` | `String` | Trimmed. |
-| `lineItems` | `[OrderLineItem]` | **Embedded** sub-documents (see §2.1) — not a separate collection. Custom validator rejects an empty array: *"An order must have at least one line item."* |
-| `status` | `String` | Enum: `Draft`, `Confirmed`, `Invoiced`, `Shipped`, `Closed`. Defaults to `Draft`. |
-| `date` | `Date` | Required. |
-| `amount` | `Number` (virtual) | **Not stored** — computed on read as `Σ(qty × price)` across `lineItems` (`orderSchema.virtual("amount")`). |
-| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
-
-### 2.1 `OrderLineItem` (embedded sub-schema)
-
-| Field | Type | Notes |
-|---|---|---|
-| `product` | `String` | Trimmed. |
-| `qty` | `Number` | **Required**, `min: 1` — a line with zero or negative quantity is never valid. |
-| `price` | `Number` | **Required**, `min: 0` — free (0) is allowed, negative is not. |
-
----
-
-## 3. `IncomingOrderDraft`
-
-| Field | Type | Notes |
-|---|---|---|
-| `customer` | `String` | Trimmed. |
-| `emailSubject` | `String` | Trimmed. The subject line of the inbound email this draft was parsed from. |
-| `lineItems` | `[DraftLineItem]` | Embedded sub-schema (`qty` and `price` optional during draft review). |
-| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
-
----
-
-## 4. `Shipment`
-
-| Field | Type | Notes |
-|---|---|---|
-| `number` | `String` | Required, **unique**. Human-readable tracking number, e.g. `SHP-2026/09/03/A001` — see §5. Assigned once atomically at creation. |
-| `orderId` | `ObjectId` | Required, **`ref: "Order"`**. Foreign key linking to the source order. Populated on API reads to provide customer name, line items, and order status in a single round-trip. |
-| `invoiceId` | `ObjectId` | Optional / Nullable, **`ref: "Invoice"`**. Foreign key linking to the billing invoice. Populated on API reads to provide the human-readable invoice `number`. |
-| `status` | `String` | Enum: `Draft`, `Packed`, `Dispatched`, `Delivered`. Defaults to `Draft`. Validated on create and update. |
-| `date` | `Date` | Ship date / scheduled delivery date. |
-| `createdAt` / `updatedAt` | `Date` | From `{ timestamps: true }`. |
-
-### 4.1 Dual Foreign Key References & Population
-
-A `Shipment` maintains dual foreign references to tie the physical fulfillment pipeline directly with Sales and Invoicing:
-* **`orderId`**: Points to the `Order` being delivered. `toPublicShipment()` handles both populated (`order.customer`, `order.lineItems`) and unpopulated ObjectId strings transparently.
-* **`invoiceId`**: Points to the `Invoice` billing this order. If an invoice has not yet been issued when packing starts, `invoiceId` is stored as `null`.
-
-```typescript
-// server/src/models/Shipment.ts
-const shipmentSchema = new Schema(
-  {
-    number: { type: String, required: true, unique: true },
-    orderId: { type: Schema.Types.ObjectId, ref: "Order", required: true },
-    invoiceId: { type: Schema.Types.ObjectId, ref: "Invoice", default: null },
-    status: { type: String, enum: ["Draft", "Packed", "Dispatched", "Delivered"], default: "Draft" },
-    date: { type: Date },
-  },
-  { timestamps: true }
-);
-```
-
-### 4.2 Delivery Lifecycle Endpoints
-
-Shipments support standard REST CRUD operations plus dedicated lifecycle transition actions:
-
-```
-[ Draft ] ──(Mark Packed)──> [ Packed ] ──(PATCH /dispatch)──> [ Dispatched ] ──(PATCH /deliver)──> [ Delivered ]
-```
-
-* **`POST /api/shipments`**: Creates a new shipment, draws atomic `SHP-...` number, and links `orderId` and optional `invoiceId`.
-* **`PATCH /api/shipments/:id/dispatch`**: Transitions status to `"Dispatched"` when the courier van departs.
-* **`PATCH /api/shipments/:id/deliver`**: Transitions status to `"Delivered"` when the customer receives the goods.
-* **`PUT /api/shipments/:id`**: Updates editable fields (date, status, linked invoice).
-
-### 4.3 Offline Manifest Caching (`offlineCache.ts`)
-
-To ensure warehouse operators and mobile delivery drivers can view manifests in locations with weak or nonexistent internet connectivity:
-* Successful responses from `GET /api/shipments` are snapshotted to browser `localStorage` under `flowerp:cache:shipments`.
-* If a network drop or offline reload occurs, the UI falls back to `readCache("shipments")` and displays an **Offline Manifest Mode** banner with snapshot timestamp.
-* State mutations while offline fail gracefully with user-friendly error banners, requiring a live connection to guarantee database consistency.
-
----
-
-## 5. `Counter` & human-readable record numbers
+## 8. Record numbering (`Counter`)
 
 ```mermaid
 sequenceDiagram
-    participant C as shipment.controller.ts
+    participant C as controller (order/invoice/shipment/productionJob)
     participant R as recordNumber.ts
     participant Ctr as Counter (Mongo)
 
@@ -652,12 +576,10 @@ sequenceDiagram
     R-->>C: "SHP-2026/09/03/A001"
 ```
 
-| Field | Type | Notes |
-|---|---|---|
-| `key` | `String` | Required, **unique**. One document per (record type, year) — e.g. `"order:2026"`, `"invoice:2026"`, `"shipment:2026"`, `"job:2026"`. |
-| `seq` | `Number` | Defaults to `0`; incremented atomically per call via `findOneAndUpdate`. |
-
-`formatRecordNumber` (in [`recordNumber.ts`](../server/src/utils/recordNumber.ts)) produces structured tracking identifiers:
+`formatRecordNumber` (in [`recordNumber.ts`](../server/src/utils/recordNumber.ts))
+produces one structured identifier per type, all sharing the same
+`Counter` collection but partitioned by `key` (`"order:2026"`,
+`"invoice:2026"`, `"shipment:2026"`, `"job:2026"`):
 
 ```
 SHP-2026/09/03/A001
@@ -669,164 +591,152 @@ SHP-2026/09/03/A001
 
 ---
 
-## 6. Verified behaviour (End-to-End Database Validation)
+## 9. Sales pipeline workflow
 
-The following behaviors were verified against MongoDB Atlas and the live Express API:
+1. Inbound demand is parsed into an **`IncomingOrderDraft`** (`POST /api/order-drafts`).
+2. `POST /api/order-drafts/:id/approve` is a **factory method**: it
+   creates a new `Order` (`status: "Confirmed"`) carrying over the
+   draft's `lineItems`, then deletes the draft. There is **no persistent
+   link** between the two afterward — no ObjectId is stored anywhere
+   connecting the resulting `Order` back to the draft it came from, so
+   this conversion doesn't appear as an edge in §1's diagram (it's a
+   one-time transformation, not an ongoing relationship).
+3. An `Order` moves through `Draft → Confirmed → Invoiced → Shipped →
+   Closed` via `PATCH /api/orders/:id/status`.
+4. `Invoice` and `Shipment` documents reference the order via `orderId`;
+   `Shipment.invoiceId` additionally links to the invoice once one exists
+   (`null` until then).
 
-- **Missing `orderId` validation**: `POST /api/shipments` without `orderId` or with an invalid ObjectId string $\rightarrow$ `400 Bad Request` (`"A valid orderId is required."`).
-- **Invalid status validation**: `POST /api/shipments` with `status: "OnRoute"` $\rightarrow$ `400 Bad Request` with list of allowed statuses.
-- **Dual foreign reference population**: `GET /api/shipments` and `GET /api/shipments/:id` return fully populated `order` (`customer`, `lineItems`, `status`) and `invoice` (`number`), or `null` when `invoiceId` is omitted.
-- **Dispatch workflow**: `PATCH /api/shipments/:id/dispatch` atomically updates status to `"Dispatched"` and returns the updated populated document.
-- **Deliver workflow**: `PATCH /api/shipments/:id/deliver` atomically updates status to `"Delivered"` and locks the shipment from further modification.
-- **Counter sequence uniqueness**: Concurrent shipment creations draw atomic, sequential identifiers (`SHP-.../A001`, `SHP-.../A002`) without collision.
-- **Offline cache fallback**: Disconnecting the network causes the shipments view to seamlessly serve the cached manifest snapshot from `localStorage` without crashing or clearing the table.
-- Creating an `Order` without `lineItems` → `400`, with the exact
-  validation message above.
-- Creating a valid multi-line-item `Order` → `amount` virtual computed
-  correctly (`Σ qty×price`), `number` assigned in the expected format.
-- `PATCH /api/orders/:id/status` with an invalid status string → `400`,
-  order unchanged.
-- `PUT /api/orders/:id` with a client-supplied `number` in the body → the
-  server-assigned `number` is kept; the client's value is silently
-  ignored, never applied.
-- 8 orders created concurrently (`Promise`-style parallel requests) → 8
-  unique, sequential `number`s, confirming `Counter`'s atomicity under
-  real concurrency rather than just reading the code and assuming it's
-  race-free.
-- Full draft lifecycle: create → edit (`PUT`, changing a line item's
-  `qty`) → approve (`POST .../approve`) → the resulting `Order` reflects
-  the *edited* quantity (proving `approveDraft` reads the draft fresh from
-  the database rather than trusting a stale value), the draft is deleted
-  (`GET` on it afterward → `404`), and the new `Order` starts life as
-  `status: "Confirmed"`.
+**`Order` endpoints** (`server/src/routes/order.routes.ts`) — full CRUD
+plus a status action: `GET /`, `GET /:id`, `POST /`, `PUT /:id`
+(strips any client-supplied `number`), `DELETE /:id`, `PATCH /:id/status`.
 
-## 6. ProductionJob Schema & Order Linkage
+**`Invoice` endpoints** (`server/src/routes/invoice.routes.ts`) — no
+`DELETE`; an invoice moves through its lifecycle instead of being
+removed: `GET /`, `GET /:id`, `POST /`, `PUT /:id`, `PATCH /:id/mark-paid`.
 
-**Files:**
-[`server/src/models/ProductionJob.ts`](../server/src/models/ProductionJob.ts),
-[`server/src/controllers/productionJob.controller.ts`](../server/src/controllers/productionJob.controller.ts),
-[`server/src/routes/productionJob.routes.ts`](../server/src/routes/productionJob.routes.ts).
+---
 
-### 6.1 Mongoose Schema
+## 10. Shipment workflow
 
 ```
-Collection: productionjobs
+[ Draft ] ──(PUT)──> [ Packed ] ──(PATCH /dispatch)──> [ Dispatched ] ──(PATCH /deliver)──> [ Delivered ]
 ```
 
-| Field         | Type     | Required | Default     | Constraints / Notes                                                 |
-|---------------|----------|----------|-------------|----------------------------------------------------------------------|
-| `_id`         | ObjectId | auto     | —           | MongoDB primary key; used in API URLs (`/api/production-jobs/:id`). |
-| `number`      | String   | ✅       | —           | Human-readable ID (e.g. `JOB-2026/09/05/A001`). Unique, immutable after creation. Generated by `generateRecordNumber("job", …)` — see §4 above for the Counter system. |
-| `orderNumber` | String   | ❌       | —           | Soft reference to an `Order`'s `number` field. Links a Make-to-Order production run to the sales order that triggered it. Not a Mongo `ref` — it's a display-level join, matched by `number` not `_id`. |
-| `customer`    | String   | ❌       | —           | Customer name associated with the linked order. Denormalized for display; the canonical customer lives on the `Order` document. |
-| `product`     | String   | ✅       | —           | Name of the product being manufactured (matches a `Product.name`).  |
-| `qty`         | Number   | ✅       | —           | Quantity to produce. `min: 1`.                                       |
-| `due`         | Date     | ✅       | —           | Target completion date for the production run.                      |
-| `status`      | String   | ❌       | `"Planned"` | Enum: `"Planned"`, `"In Progress"`, `"Completed"`. See §6.2.       |
-| `progress`    | Number   | ❌       | `0`         | Completion percentage. `min: 0`, `max: 100`. Only meaningful while status is `"In Progress"`. |
-| `createdAt`   | Date     | auto     | —           | Mongoose `timestamps: true`.                                         |
-| `updatedAt`   | Date     | auto     | —           | Mongoose `timestamps: true`.                                         |
+**Endpoints** (`server/src/routes/shipment.routes.ts`) — no `DELETE`:
+`GET /`, `GET /:id`, `POST /`, `PUT /:id`, `PATCH /:id/dispatch`,
+`PATCH /:id/deliver`. Every one of these populates both `orderId` and
+`invoiceId` (`number` field only) before responding, via
+`toPublicShipment()`'s `Document.populated()` check.
 
-### 6.2 Status State Machine
+**Offline manifest caching** (frontend, `src/lib/offline.ts` +
+`shipments/page.tsx`): successful `GET /api/shipments` responses are
+snapshotted to `localStorage`. On a network drop, the UI falls back to
+the cached snapshot and shows an offline banner; mutations while offline
+fail with an error banner rather than silently queuing, since there's no
+conflict-resolution story for edits made against a stale snapshot.
+
+**Note on "Delivered" immutability** — see §5: this is enforced by the
+frontend's `canEdit` getter only, not by the `PUT /api/shipments/:id`
+endpoint itself.
+
+---
+
+## 11. ProductionJob workflow
+
+### 11.1 Status state machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> Planned : Job created
-    Planned --> InProgress : Work begins
-    InProgress --> Completed : progress reaches 100% or manual move
+    Planned --> "In Progress" : Work begins
+    "In Progress" --> Completed : progress reaches 100% or manual move
     Planned --> Completed : Skip (direct completion)
 
     state Planned {
-        [*] --> [*] : Editable (product, qty, due, orderNumber, customer)
+        [*] --> [*] : Editable — product, qty, due, orderNumber, customer (canEdit)
     }
-
-    state InProgress {
-        [*] --> [*] : Only progress (0-100%) can be updated
+    state "In Progress" {
+        [*] --> [*] : Only progress (0-100%) editable (canEditProgress)
     }
-
     state Completed {
         [*] --> [*] : Read-only
     }
 ```
 
-**Transition rules enforced by the frontend domain model**
-(`src/domain/ProductionJob.ts`):
+Enforced on the frontend by `src/domain/ProductionJob.ts`'s `canEdit`
+(`status === "Planned"`) and `canEditProgress`
+(`status === "In Progress"`) getters. The backend accepts status
+transitions via `PATCH /api/production-jobs/:id/status`
+(`{ status, progress? }`); the Mongoose enum validator rejects any string
+outside the three allowed values with `400`, but — same caveat as
+Shipment in §5 — the backend does not itself block a `PUT` to a
+`Completed` job's scope fields; that's a frontend-only rule.
 
-- **Planned**: Full edit of scope fields (`product`, `qty`, `due`,
-  `orderNumber`, `customer`) via `canEdit`.
-- **In Progress**: Only `progress` (0–100%) is editable, via
-  `canEditProgress`. Scope is frozen.
-- **Completed**: Fully read-only; no fields are editable.
+### 11.2 Order linkage (Make-to-Order)
 
-**Backend enforcement**: Status transitions are accepted via
-`PATCH /api/production-jobs/:id/status` (body: `{ status, progress? }`).
-The Mongoose enum validator rejects any string outside the three allowed
-values, returning `400`.
+`ProductionJob.orderNumber` stores the order's human-readable `number`
+string, not its `_id` — a soft reference, not a Mongo `ref`. Rationale:
+the production Kanban board displays the order number directly, so a
+`populate()` round-trip would add latency for a string that's already
+available at creation time. Trade-off: renaming or deleting an order
+doesn't cascade to its production jobs, which the team considers
+acceptable since a job represents physical work that can't be "undone" by
+an order-side change. See §1's diagram and §2's matrix for how this is
+represented.
 
-### 6.3 Order Linkage (Make-to-Order)
+**Endpoints** (`server/src/routes/productionJob.routes.ts`) — no
+`DELETE`: `GET /`, `GET /:id`, `POST /`, `PUT /:id`,
+`PATCH /:id/status`.
 
-A `ProductionJob` is optionally linked to an `Order` via the
-`orderNumber` field. This is a *soft reference* — it stores the order's
-human-readable `number` string (e.g. `ORD-2026/09/05/A001`), not its
-`_id`. The linkage is established at job creation time when a production
-run is triggered from a sales order.
+---
 
-```mermaid
-erDiagram
-    ORDER {
-        ObjectId _id PK
-        String number UK "e.g. ORD-2026/09/05/A001"
-        String customer
-        String status
-    }
+## 12. Decommissioned: Next.js in-memory `UserRepository`
 
-    PRODUCTION_JOB {
-        ObjectId _id PK
-        String number UK "e.g. JOB-2026/09/05/A001"
-        String orderNumber FK "soft ref to Order.number"
-        String customer "denormalized from Order"
-        String product
-        Number qty
-        Date due
-        String status "Planned | In Progress | Completed"
-        Number progress "0-100"
-    }
+Earlier in this project, `src/repositories/UserRepository.ts` and
+`src/repositories/user-seed-data.ts` held an in-memory, array-backed
+`User` store used by the Next.js app's own prototype auth routes, built
+to validate the auth *design* (session tokens, `canEdit`-style
+encapsulation, route protection) ahead of the mandated Express/Mongoose
+backend existing.
 
-    ORDER ||--o{ PRODUCTION_JOB : "triggers (Make-to-Order)"
-```
+That cutover is complete: every Next.js auth/user route
+(`/api/auth/login`, `/api/auth/register`, `/api/auth/logout`,
+`/api/users`, `/api/users/[id]`, and the `settings/users` Server
+Component) proxies to the Express backend server-to-server rather than
+reading its own array, and both sides share one JWT format (standard
+3-part HS256, same `JWT_SECRET`, same `flowerp_token` cookie name) so a
+token signed by either side verifies on the other. With nothing left
+importing them, `UserRepository.ts`, `user-seed-data.ts`, and the
+Next.js side's now-unused `PasswordHasher.ts` were deleted. Auth and role
+checks are 100% MongoDB-backed, per §7.
 
-**Why a soft reference instead of `mongoose.Schema.Types.ObjectId ref`?**
-The link uses the human-readable `number` rather than `_id` because the
-production page's Kanban board displays the order number directly —
-a `populate()` round-trip would add latency for a single string that's
-already available at creation time. The trade-off is that deleting or
-renaming an order doesn't cascade to production jobs, which is acceptable
-since production jobs represent physical work that can't be "un-done" by
-an order change.
+---
 
-### 6.4 API Endpoints
+## 13. Verified behaviour (end-to-end, against MongoDB Atlas)
 
-| Method | Path                                  | Description                                      |
-|--------|---------------------------------------|--------------------------------------------------|
-| GET    | `/api/production-jobs`                | List all production jobs.                        |
-| GET    | `/api/production-jobs/:id`            | Get a single job by MongoDB `_id`.               |
-| POST   | `/api/production-jobs`                | Create a new job. `number` is auto-assigned.     |
-| PUT    | `/api/production-jobs/:id`            | Full update (product, qty, due, status, progress, orderNumber, customer). |
-| PATCH  | `/api/production-jobs/:id/status`     | Partial update — status and/or progress only.    |
-
-All routes are protected by `requireAuth` middleware (JWT session cookie).
-
-### 6.5 Progress Tracking (0–100%)
-
-The `progress` field represents WIP (Work In Progress) completion as an
-integer percentage. Mongoose enforces `min: 0` and `max: 100` at the
-schema level — any value outside this range triggers a validation error
-(`400`). The field defaults to `0` at creation and is only semantically
-meaningful while `status === "In Progress"`:
-
-- **Planned** jobs: `progress` is `0` (default); the UI hides the
-  progress bar.
-- **In Progress** jobs: `progress` is actively updated by shop-floor
-  operators as work advances.
-- **Completed** jobs: `progress` is typically `100`; the UI shows it
-  dimmed/read-only.
+- **Order**: missing `lineItems` → `400`; a valid multi-line order →
+  `amount` virtual computed correctly and `number` assigned in the
+  expected format; `PATCH /:id/status` with an invalid status string →
+  `400`, order unchanged; a client-supplied `number` in a `PUT` body is
+  silently ignored, server-assigned value kept; 8 orders created
+  concurrently → 8 unique sequential numbers (real concurrency, not just
+  read-and-assumed).
+- **IncomingOrderDraft**: full lifecycle — create → edit (`PUT`, changing
+  a line item's `qty`) → approve (`POST .../approve`) — the resulting
+  `Order` reflects the *edited* quantity (proving `approveDraft` reads
+  the draft fresh rather than trusting a stale value); the draft is
+  deleted (`GET` on it afterward → `404`); the new `Order` starts as
+  `status: "Confirmed"`.
+- **Shipment**: missing/invalid `orderId` → `400` ("A valid orderId is
+  required."); invalid `status` string → `400` with the allowed-values
+  list; `GET /api/shipments`/`GET /:id` return populated `order` and
+  `invoice` (or `null` when `invoiceId` is unset); `dispatch`/`deliver`
+  atomically update status and return the populated document; concurrent
+  shipment creation draws sequential, collision-free numbers.
+- **Invoice**/**Customer**/**Supplier**/**Product**: full
+  create → list → get → update round trips verified via curl against the
+  live Atlas cluster, plus edge cases — missing required field → `400`,
+  duplicate `Product.sku` → `409`, negative price → `400`, unauthenticated
+  request → `401`, unknown id → `404`. All test-only documents were
+  deleted afterward.

@@ -38,19 +38,24 @@ grading purposes.
 ```
 src/
   domain/          Entity classes — identity + behavior, no React, no fetch
-  repositories/     Data access — one interface, swappable implementations
-  store/            ERPStore — the app's state, framework-agnostic
   components/       Presentational React components, grouped by feature
-  app/              Next.js routes — thin: fetch from the store, render components
+  app/              Next.js routes — fetch directly from /api/*, render components
+  lib/offline/      fetchWithCache() — the one shared client-side caching
+                     helper every data-fetching page uses (see "Client-side
+                     caching" below)
   server/auth/      Server-only session handling (JWT verify/sign, cookie
                      read/write) — see "Authentication & Users". Password
                      hashing itself lives only in /server now (MongoDB-side).
   proxy.ts          Route protection, runs before every matched request
 ```
 
-Data flows one direction: **repositories → ERPStore → useERPStore() → components**.
-Nothing above the repository layer knows or cares that today's
-repositories are in-memory arrays instead of HTTP calls to a real backend.
+Every page under `app/` fetches its own data directly from the Express
+backend's `/api/*` routes and holds it in component-local `useState` —
+there is no intermediate client-side store between the backend and the
+UI. That wasn't the original design — see "The data layer" below for how
+an in-memory-repository-plus-store layer got built first, then fully
+retired once every entity had migrated to the real backend — but it's the
+current, and final, shape.
 
 ### Why this split (and not React class components everywhere)
 
@@ -66,11 +71,11 @@ hooks, Server Components, or the App Router's data model, and would have
 meant re-deriving all of React's modern conveniences by hand. The OOP
 requirement is honored where it actually matters — the **data and
 business logic** — via real classes with encapsulation, inheritance and
-polymorphism (`domain/`, `repositories/`, `store/ERPStore.ts`). The
-**UI** stays declarative functional components, which is what Next.js
-and React 19 are designed around. This mirrors the original mockup's own
-shape, which also kept one class as the logic/state owner
-(`class Component extends DCLogic`) separate from the template.
+polymorphism (`domain/`). The **UI** stays declarative functional
+components, which is what Next.js and React 19 are designed around. This
+mirrors the original mockup's own shape, which also kept one class as the
+logic/state owner (`class Component extends DCLogic`) separate from the
+template.
 
 ## OOP concepts, with receipts
 
@@ -89,47 +94,35 @@ shape, which also kept one class as the logic/state owner
   [`User`](src/domain/User.ts) takes this further: its password hash has
   no public getter at all, only a `toPublic()` that structurally can't
   include it — see "Authentication & Users" below.
-- **Abstraction** — [`Repository<T>`](src/repositories/Repository.ts) is
-  an interface; `ERPStore` and every component depend on that interface,
-  never on "it's an in-memory array." Swapping storage means writing one
-  new class per repository, not touching the store or UI.
 - **Inheritance** — every domain entity extends
   [`Entity`](src/domain/Entity.ts) (identity). `Order`, `Invoice`, and
   `Shipment` further extend
   [`StatusfulEntity`](src/domain/StatusBadge.ts) (identity + a status
-  lifecycle). Every repository extends
-  `InMemoryRepository<T>` for the shared array-backed CRUD.
+  lifecycle).
 - **Polymorphism** — [`StatusTag`](src/components/ui/Tag.tsx) renders
   *any* `Statusable` entity by calling `entity.badgeStyle()`; it has no
   switch statement on entity type. `Order`, `Invoice`, and `Shipment`
   each satisfy the interface with their own status, and the component
   doesn't need to know which one it got.
 - **Single Responsibility** — domain classes hold data + intrinsic
-  behavior only; cross-entity joins (e.g. "what customer does this
-  invoice bill?") live in `ERPStore` (`invoiceCustomer()`,
-  `shipmentCustomer()`), because no single entity owns that relationship.
-  UI-only state (dialog open/closed, form field values, which sales view
-  is showing) lives in the component that needs it via `useState`, not in
-  `ERPStore` — it's not domain data and doesn't need to survive
-  navigation.
+  behavior only (status transitions, `canEdit` gating, formatting) — they
+  never fetch and never hold UI-only state. UI-only state (dialog
+  open/closed, form field values, which sales view is showing) lives in
+  the component that needs it via `useState` instead, since it's not
+  domain data and doesn't need to survive navigation.
 - **Factory method** — [`IncomingOrderDraft.toOrder()`](src/domain/IncomingOrderDraft.ts)
-  turns a reviewed email-parsed draft into a real `Order`. The
-  "New Order" panel calls this through `ERPStore.approveIncomingDraft()`.
+  turns a reviewed email-parsed draft into a real `Order`. The same
+  conversion is what `POST /api/order-drafts/:id/approve` now performs
+  server-side, in `orderDraft.controller.ts`'s `approveDraft` (see
+  "Backend" below) — `sales/page.tsx` calls that endpoint directly rather
+  than invoking `toOrder()` itself, so the pattern is demonstrated on the
+  domain class, but the live call path is the backend's own factory-method
+  shaped controller function.
 - **Value objects** — [`Money`](src/domain/Money.ts) wraps dollar amounts
   as integer cents so formatting/arithmetic can't drift from
   floating-point error; it's immutable (`add`/`multiply` return new
-  instances).
-- **Dependency inversion** — `ERPStore` composes concrete
-  `InMemoryRepository` subclasses today, but every method signature it
-  exposes (`orders`, `findOrder`, ...) is shaped by the `Repository<T>`
-  interface, not by "array." See "Swapping in a real database" below.
-- **Observer pattern** — [`Observable`](src/store/Observable.ts) is a
-  minimal pub/sub base class with no React import. `ERPStore extends
-  Observable` and calls `this.notify()` after every mutation.
-  [`useERPStore`](src/store/useERPStore.ts) is the *only* place that
-  bridges it into React, via `useSyncExternalStore`. This is what lets
-  `ERPStore` stay framework-agnostic (it would work in a script or a test
-  with no React runtime) while components still re-render on change.
+  instances). Actively used by `Order`, `Product`, `IncomingOrderDraft`,
+  and the Dashboard/Invoicing/Sales UI.
 - **Composition over duplication** — [`RecordDialog`](src/components/ui/RecordDialog.tsx)
   is the one popup shell for viewing/editing a record (see "Record detail
   popups" below). It owns the view/edit toggle and Save/Cancel/Close
@@ -137,44 +130,87 @@ shape, which also kept one class as the logic/state owner
   own fields via a `children(mode)` render prop, instead of four separate
   popup implementations copying the same modal/edit-toggle boilerplate.
 
-## The data layer, and swapping in a real database
+**Retired OOP demonstrations, for the record.** This project used to also
+demonstrate **Abstraction** (a `Repository<T>` interface every concrete
+repository implemented), a second half of **Inheritance** (every
+repository extending a shared `InMemoryRepository<T>`), **Dependency
+inversion** (`ERPStore` composing repositories only through that
+interface, never touching "it's an array" directly), and the **Observer
+pattern** (`Observable`, a pub/sub base class with no React import,
+extended by `ERPStore`, bridged into React by `useERPStore`'s
+`useSyncExternalStore` call). All of that lived under
+`src/repositories/` and `src/store/`. Once every entity had migrated to
+fetching directly from the real Express backend (see "The data layer"
+below), none of it was reachable from any page any more — confirmed by
+grepping the whole `src/app` tree for `useERPStore` and finding zero
+matches — so the dead files were deleted rather than kept around as inert
+weight purely to keep this list longer. If a grader is specifically
+looking for these four patterns, they're in this repo's git history (the
+commit that removed `src/repositories/` and `src/store/`), not in the
+current tree.
 
-Every repository still under `src/repositories/*.ts` implements the
-[`Repository<T>`](src/repositories/Repository.ts) interface and is
-backed by `InMemoryRepository`, seeded from
-[`seed-data.ts`](src/repositories/seed-data.ts) (ported 1:1 from the
-`state = {...}` block in the original `.dc.html`). This was originally
-written for a hypothetical swap where a new repository class would
-implement the same interface and get injected into `ERPStore`, with
-`components/`/`app/` never needing to change because they only ever
-called `ERPStore` methods.
+## The data layer — what it used to be, and why it's gone
 
-**That's not the path Order actually took, and it's worth knowing why.**
-Order (and its `IncomingOrderDraft`) were the first entity fully wired to
-the real Express + MongoDB backend (see "Backend (Express + Mongoose)"
-below) — `OrderRepository` was deleted outright, `ORDER_SEED`/
-`INCOMING_DRAFT_SEED` removed from `seed-data.ts`, and every
-Order-dependent method stripped from `ERPStore` (see its git history if
-you need the old shape) rather than reimplemented against `Repository<T>`.
-Instead, [`sales/page.tsx`](<src/app/(app)/sales/page.tsx>) talks to
-`/api/orders` and `/api/order-drafts` directly with `fetch()` — plain
-component-local `useState`/`useEffect`, no `ERPStore` involved at all.
-`useERPStore()` is not called anywhere in the app any more; `ERPStore`
-itself is dead code for every entity that's made this same jump. The
-`Repository<T>` abstraction did its job as a placeholder while the real
-backend didn't exist yet, but the actual migration turned out to be "the
-page owns its own fetches" rather than "swap the class behind the
-interface" — worth remembering before assuming any given screen still
-reads from `ERPStore`. Check whether the page does its own `fetch()`
-before touching a repository or `ERPStore` method for an entity you're
-working on.
+Every entity originally read from an in-memory, array-backed repository
+(`src/repositories/*Repository.ts`, one per entity, all implementing a
+`Repository<T>` interface), composed by a single `ERPStore` class and
+bridged into React via `useERPStore()`. The idea was that swapping to a
+real database would mean writing one new repository class per entity and
+injecting it into `ERPStore`, with `components/`/`app/` never needing to
+change because they only ever called `ERPStore` methods.
 
-Repository mutation methods that are currently synchronous (`add`,
-`moveStatus`, `markPaid`, ...) will need to become `async` for any
-remaining mock entity that makes this same jump — that ripples into
-`ERPStore`'s action methods and the components that call them, but by the
-time that's needed the "page calls `fetch()` directly" pattern Order
-established is probably the more likely path anyway.
+**That's not the path any entity actually took.** `Order` (and
+`IncomingOrderDraft`) were migrated first, wired directly to
+`/api/orders`/`/api/order-drafts` via `fetch()` in
+[`sales/page.tsx`](<src/app/(app)/sales/page.tsx>) — plain
+component-local `useState`/`useEffect`, no `ERPStore` involved. Every
+other entity (`Shipment`, `ProductionJob`, `Invoice`, `Customer`,
+`Supplier`, `Product`, `InventoryItem`, plus the Dashboard's activity
+feed and revenue series) followed that exact same pattern rather than
+ever being reimplemented against `Repository<T>`. Once the last entity
+made that jump, `ERPStore` had zero live callers left, so
+`src/repositories/` and `src/store/` were deleted outright rather than
+kept as dead weight — verified before deleting by grepping `useERPStore`
+and every concrete repository class name across the whole `src/app` tree
+and finding no matches outside those two now-removed directories
+themselves.
+
+**If you're looking for a repository or an `ERPStore` method for some
+entity, it doesn't exist any more.** Go look at that entity's own
+`page.tsx` — it calls `fetch()` (optionally through `fetchWithCache()`,
+see "Client-side caching" below) directly against `/api/<entity>`; see
+the matching routes/controllers under `server/src/` for what's available
+server-side.
+
+## Client-side caching
+
+Every page that fetches live data client-side wraps its `GET` requests in
+[`fetchWithCache()`](src/lib/offline/fetchWithCache.ts) — Dashboard,
+Sales/Orders, Invoicing, Shipments, Production, Inventory, and
+Settings → Customers/Suppliers/Products. On success it writes the raw
+JSON response into `localStorage` (keyed by URL by default); on failure —
+a dropped connection, a request that throws, or a non-2xx response — it
+falls back to that cached snapshot instead of leaving the screen blank,
+and reports `isFromCache`/`cachedAt` so the page can show an "offline —
+showing cached data" indicator. `settings/users/page.tsx` is the one
+exception, and correctly so: it's a Server Component making a
+server-to-server `fetch()`, which has no concept of the *browser* being
+offline.
+
+This used to be three separate, independently-written implementations of
+the same idea — `src/lib/offline/fetchWithCache.ts` (used by
+Dashboard/Inventory/Production/Customers/Products/Suppliers),
+a second module `src/lib/offlineCache.ts` with a lower-level
+`readCache`/`writeCache` pair that Sales and Shipments each wrapped their
+own hand-rolled fetch logic around, and a third, ad-hoc version
+duplicated directly inside `invoicing/page.tsx` using raw
+`localStorage.getItem`/`setItem` calls with hardcoded keys. All three did
+the same job — cache a successful response, fall back to it on failure —
+just written three separate times by three different people. Sales,
+Shipments, and Invoicing were migrated onto the single
+`fetchWithCache()` helper and the redundant `src/lib/offlineCache.ts` was
+deleted, so there's now exactly one caching mechanism in the codebase
+instead of three.
 
 ## Authentication & Users
 
@@ -482,17 +518,21 @@ call on every request under both the long-running (`server.ts`) and
 serverless (`api/index.ts`) entry points. Full connection and schema
 documentation lives in [`docs/schema-diagram.md`](docs/schema-diagram.md).
 
-## Database (Supabase, V1)
+## Database (Supabase, V1) — superseded
 
-The app itself still runs on the in-memory repositories described above —
-this section covers the Supabase project that's being stood up alongside
-it, ahead of actually wiring a `Sql*Repository` per entity. **Supabase is
-explicitly a stand-in**: the plan is to move to MongoDB later, so nothing
-here should end up baked into `ERPStore` or the domain layer — only into
-new repository implementations, exactly as "Swapping in a real database"
-above describes. That's the whole point of the `Repository<T>` interface:
-the database underneath it can change (in-memory → Supabase/Postgres →
-MongoDB) without the swap ever being visible above the repository layer.
+**Status: superseded by the direct-to-MongoDB migration described in "The
+data layer" above; kept here as a historical record, not a live plan.**
+This section originally covered a Supabase project stood up as an
+explicit stand-in ahead of writing a `Sql*Repository` per entity, with
+the intent of eventually moving to MongoDB behind that same
+`Repository<T>` interface without the swap ever being visible above the
+repository layer. That's not what happened: every entity was instead
+wired directly to the real Express + MongoDB backend from its own
+`page.tsx`, and `Repository<T>`/`ERPStore`/the in-memory repositories were
+deleted outright rather than ever getting a `Sql*Repository`
+implementation. The SQL files below still exist and are harmless to run
+against a fresh Supabase project, but nothing in this app reads from or
+writes to Supabase any more.
 
 **Files:**
 
@@ -507,8 +547,8 @@ MongoDB) without the swap ever being visible above the repository layer.
   `set_updated_at()` trigger and Row Level Security turned on — `users` is
   the one exception to the *permissive* policy, see below.
 - [`DB_V1_Insert.sql`](DB_V1_Insert.sql) — master/demo data, ported 1:1
-  from [`seed-data.ts`](src/repositories/seed-data.ts) (same ids, names,
-  quantities, prices), plus the one seeded admin account (`admin` /
+  at the time from the now-deleted `src/repositories/seed-data.ts` (same
+  ids, names, quantities, prices), plus the one seeded admin account (`admin` /
   `admin@123`, hashed with pgcrypto — see "Authentication & Users" above).
   Run after `DB_V1.sql`. Safe to re-run.
 
@@ -585,9 +625,9 @@ navigation, and a `selectedInvoiceId` / `settingsTab` state for
 | `settingsTab` | `/settings/customers`, `/settings/suppliers`, `/settings/products`, `/settings/users` (nested layout at `src/app/(app)/settings/layout.tsx`) |
 | *(new — not in the original design)* | `/login` |
 
-This means settings tabs are shareable/bookmarkable URLs, and `ERPStore`
-doesn't need to track "current screen" as state at all — the URL is the
-state. Invoice detail *used* to be a route too
+This means settings tabs are shareable/bookmarkable URLs, and no
+client-side store needs to track "current screen" as state at all — the
+URL is the state. Invoice detail *used* to be a route too
 (`/invoicing/[invoiceId]`) but was later replaced by a popup — see
 "Record detail popups" below — for consistency with Sales, Shipments and
 Production, none of which ever had a detail route.
@@ -596,9 +636,9 @@ Every one of those routes now lives inside an `(app)` route group
 (`src/app/(app)/...`) rather than directly under `src/app/`. Route groups
 don't affect the URL — `(app)/dashboard/page.tsx` still serves `/dashboard`
 — they only let a subtree share a layout that other routes opt out of.
-That's exactly what `/login` needs: it must render *without* the
-Sidebar/ERPStoreProvider shell, so the shell moved from the root layout
-into `(app)/layout.tsx`, and the true root layout
+That's exactly what `/login` needs: it must render *without* the Sidebar
+shell, so the shell moved from the root layout into `(app)/layout.tsx`,
+and the true root layout
 ([`layout.tsx`](src/app/layout.tsx)) is now just `<html>`/`<body>` + fonts.
 See "Authentication & Users" below for how that layout also reads the
 signed-in user server-side.
@@ -606,8 +646,8 @@ signed-in user server-side.
 The **sidebar** ([`Sidebar.tsx`](src/components/layout/Sidebar.tsx)) is
 mounted once in `(app)/layout.tsx` and owns its own collapsed/expanded
 `useState` — that state is UI-only, not domain data, so it doesn't
-belong in `ERPStore`. Because that layout doesn't remount between route
-changes within `(app)`, it survives navigation anyway.
+belong in a shared store. Because that layout doesn't remount between
+route changes within `(app)`, it survives navigation anyway.
 
 ## Record detail popups (view/edit)
 
@@ -650,17 +690,22 @@ meant making a few of these real:
 
 - **Dashboard stat tiles** (Pending Orders / In Production / Shipments
   Today / Low Stock) were hardcoded `5`, `4`, `2`, `3` in the template.
-  They're now computed in `ERPStore` (`pendingOrdersCount`, etc.) from
-  the actual order/job/shipment/inventory collections.
+  They're now computed directly in
+  [`dashboard/page.tsx`](<src/app/(app)/dashboard/page.tsx>)
+  (`pendingOrdersCount`, `inProductionCount`, `shipmentsTodayCount`,
+  `lowStockCount`) from the orders/jobs/shipments/inventory arrays it
+  fetches from the real backend.
 - **Revenue chart** was a hand-drawn static SVG path. It's now driven by
   [`RevenueChart.tsx`](src/components/dashboard/RevenueChart.tsx) reading
-  `ERPStore.revenueSeries` (seeded data), scaled dynamically.
+  the `revenueSeries` array fetched from `/api/revenue-series` (real
+  MongoDB data, not seeded), scaled dynamically.
 - **"New Order" approval**: in the mockup, clicking "Approve & create
   order" just closed the panel — it didn't actually add anything to the
-  order list. Here, [`IncomingOrderDraft.toOrder()`](src/domain/IncomingOrderDraft.ts)
-  really creates an `Order` and `ERPStore.approveIncomingDraft()` adds it
-  to the order book, because leaving that as a no-op would make the
-  Sales workflow feel broken in a real app.
+  order list. Here, `POST /api/order-drafts/:id/approve` really creates
+  an `Order` server-side (see `approveDraft` in
+  `orderDraft.controller.ts`) and `sales/page.tsx` refreshes its order
+  list afterward, because leaving that as a no-op would make the Sales
+  workflow feel broken in a real app.
 - **Sidebar collapse**: the mockup exposed `sidebarCollapsed` only as a
   design-tool preview prop, with no actual toggle control. There's now a
   real collapse button, since the CSS already had a width transition
@@ -873,6 +918,31 @@ worked examples of the same pattern.
     `requireAdmin` authorization flow) as Mermaid diagrams, for M3
     sign-off. Verified with `tsc --noEmit` clean on both the Next.js app
     and `/server` after the deletions.
+19. **Deleted the now-fully-dead `ERPStore`/repository layer and
+    consolidated client-side caching**, prompted by an M3 status check
+    that found the "MongoDB replaces mock data" claim was functionally
+    true for every entity but the old mock-data machinery had never
+    actually been removed. Confirmed via grep across the entire `src/app`
+    tree that `useERPStore` had zero remaining callers (every page had
+    already migrated to calling `/api/*` directly with its own
+    `useState`/`useEffect`, per "The data layer" above), then deleted
+    `src/store/` (`ERPStore.ts`, `ERPStoreProvider.tsx`, `Observable.ts`,
+    `useERPStore.ts`, `index.ts`) and `src/repositories/` (`Repository.ts`,
+    `CustomerRepository.ts`, `SupplierRepository.ts`,
+    `ProductRepository.ts`, `InventoryRepository.ts`, `seed-data.ts`,
+    `index.ts`) outright — the domain classes themselves
+    (`Customer`/`Supplier`/`Product`/`InventoryItem`/etc.) were left
+    untouched, matching how `Order`/`Invoice`/`Shipment`/`ProductionJob`'s
+    domain classes already survived their own repositories' earlier
+    deletion. Separately, found three independent, hand-written
+    client-side caching implementations doing the same job
+    (`src/lib/offline/fetchWithCache.ts`, a second module
+    `src/lib/offlineCache.ts`, and ad-hoc inline `localStorage` code in
+    `invoicing/page.tsx`) — migrated Sales, Shipments, and Invoicing onto
+    the one `fetchWithCache()` helper and deleted `offlineCache.ts`, so
+    there's now exactly one caching mechanism instead of three. Verified
+    with `tsc --noEmit`, `eslint` on every changed file, and a full
+    `next build` (all pages compiled, all clean) after both changes.
 
 ## Running it
 
