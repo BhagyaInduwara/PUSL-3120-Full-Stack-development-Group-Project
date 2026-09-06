@@ -17,14 +17,8 @@ import { OrderDetailDialog } from "@/components/sales/OrderDetailDialog";
 import { PendingMoveBanner } from "@/components/ui/PendingMoveBanner";
 
 import { API_URL } from "@/lib/apiUrl";
-import { readCache, writeCache } from "@/lib/offlineCache";
+import { fetchWithCache } from "@/lib/offline";
 type View = "board" | "table";
-
-const CACHE_KEYS = {
-  orders: "sales:orders",
-  draft: "sales:draft",
-  jobs: "sales:jobs",
-} as const;
 
 interface ApiOrder {
   _id: string;
@@ -88,54 +82,43 @@ function toJob(j: ApiProductionJob): ProductionJob {
 interface FetchResult<T> {
   data: T;
   offline: boolean;
-  cachedAt?: string;
+  cachedAt?: number;
 }
 
 /**
  * Pure fetches, no setState — see production/page.tsx for why
- * (react-hooks/set-state-in-effect). Each caches the raw API response on
- * success and falls back to that cache (see src/lib/offlineCache.ts) if the
- * request fails — a dropped connection, or reloading the page while
+ * (react-hooks/set-state-in-effect). fetchWithCache (src/lib/offline)
+ * caches the raw API response on success and falls back to that cache if
+ * the request fails — a dropped connection, or reloading the page while
  * offline, still shows the last-known board instead of going blank.
  */
 async function fetchOrders(): Promise<FetchResult<Order[]>> {
   try {
-    const res = await fetch(`${API_URL}/api/orders`, { credentials: "include" });
-    if (!res.ok) throw new Error(`GET /api/orders failed: ${res.status}`);
-    const raw = (await res.json()) as ApiOrder[];
-    writeCache(CACHE_KEYS.orders, raw);
-    return { data: raw.map(toOrder), offline: false };
+    const { data, isFromCache, cachedAt } = await fetchWithCache<ApiOrder[]>(`${API_URL}/api/orders`);
+    return { data: data.map(toOrder), offline: isFromCache, cachedAt };
   } catch {
-    const cached = readCache<ApiOrder[]>(CACHE_KEYS.orders);
-    return { data: (cached?.data ?? []).map(toOrder), offline: true, cachedAt: cached?.cachedAt };
+    return { data: [], offline: true };
   }
 }
 
 async function fetchFirstDraft(): Promise<FetchResult<IncomingOrderDraft | null>> {
   try {
-    const res = await fetch(`${API_URL}/api/order-drafts`, { credentials: "include" });
-    if (!res.ok) throw new Error(`GET /api/order-drafts failed: ${res.status}`);
-    const drafts = (await res.json()) as ApiDraft[];
-    const first = drafts.length > 0 ? drafts[0] : null;
-    writeCache(CACHE_KEYS.draft, first);
-    return { data: first ? toDraft(first) : null, offline: false };
+    const { data, isFromCache, cachedAt } = await fetchWithCache<ApiDraft[]>(`${API_URL}/api/order-drafts`);
+    const first = data.length > 0 ? data[0] : null;
+    return { data: first ? toDraft(first) : null, offline: isFromCache, cachedAt };
   } catch {
-    const cached = readCache<ApiDraft | null>(CACHE_KEYS.draft);
-    return { data: cached?.data ? toDraft(cached.data) : null, offline: true, cachedAt: cached?.cachedAt };
+    return { data: null, offline: true };
   }
 }
 
 async function fetchJobs(): Promise<FetchResult<ProductionJob[]>> {
   try {
-    const res = await fetch(`${API_URL}/api/production-jobs`, { credentials: "include" });
-    if (!res.ok) throw new Error(`GET /api/production-jobs failed: ${res.status}`);
-    const data = await res.json();
-    const raw = data.productionJobs as ApiProductionJob[];
-    writeCache(CACHE_KEYS.jobs, raw);
-    return { data: raw.map(toJob), offline: false };
+    const { data, isFromCache, cachedAt } = await fetchWithCache<{ productionJobs: ApiProductionJob[] }>(
+      `${API_URL}/api/production-jobs`
+    );
+    return { data: data.productionJobs.map(toJob), offline: isFromCache, cachedAt };
   } catch {
-    const cached = readCache<ApiProductionJob[]>(CACHE_KEYS.jobs);
-    return { data: (cached?.data ?? []).map(toJob), offline: true, cachedAt: cached?.cachedAt };
+    return { data: [], offline: true };
   }
 }
 
@@ -161,9 +144,9 @@ export default function SalesPage() {
   const [pendingMove, setPendingMove] = useState<{ orderId: string; fromStatus: OrderStatus; toStatus: OrderStatus } | null>(
     null
   );
-  /** True once the board is known to be showing a cached snapshot rather than a live fetch — see src/lib/offlineCache.ts. */
+  /** True once the board is known to be showing a cached snapshot rather than a live fetch — see src/lib/offline/fetchWithCache.ts. */
   const [offline, setOffline] = useState(false);
-  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
   /** Surfaced for write actions (move/save/create/approve) that fail — separate from newOrderError, which stays scoped to the New Order dialog itself. */
   const [actionError, setActionError] = useState<string | null>(null);
 

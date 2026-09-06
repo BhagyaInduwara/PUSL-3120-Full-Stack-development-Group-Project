@@ -9,11 +9,7 @@ import { NewShipmentDialog, type NewShipmentData } from "@/components/shipments/
 import { Shipment, type ShipmentEditableFields, type ShipmentStatus } from "@/domain/Shipment";
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 import { API_URL } from "@/lib/apiUrl";
-import { readCache, writeCache } from "@/lib/offlineCache";
-
-const CACHE_KEYS = {
-  shipments: "shipments",
-};
+import { fetchWithCache } from "@/lib/offline";
 
 function fmtDate(value: string): string {
   if (!value) return value;
@@ -45,7 +41,7 @@ interface FetchResult<T> {
   data: T;
   orderById: Map<string, Order>;
   offline: boolean;
-  cachedAt?: string;
+  cachedAt?: number;
 }
 
 function toOrder(o: ApiOrderEmbed): Order {
@@ -79,21 +75,17 @@ function processApiShipments(apiShipments: ApiShipment[]): { shipments: Shipment
   return { shipments: apiShipments.map(toShipment), orderById };
 }
 
-/** Fetches shipments from API; falls back to localStorage cache on failure to support offline drivers/warehouse. */
+/** Fetches shipments from API; falls back to localStorage cache (src/lib/offline) on failure to support offline drivers/warehouse. */
 async function fetchShipments(): Promise<FetchResult<Shipment[]>> {
   try {
-    const res = await fetch(`${API_URL}/api/shipments`, { credentials: "include" });
-    if (!res.ok) throw new Error(`GET /api/shipments failed: ${res.status}`);
-    const data = await res.json();
-    const raw = (data.shipments ?? []) as ApiShipment[];
-    writeCache(CACHE_KEYS.shipments, raw);
-    const { shipments, orderById } = processApiShipments(raw);
-    return { data: shipments, orderById, offline: false };
+    const { data, isFromCache, cachedAt } = await fetchWithCache<{ shipments: ApiShipment[] }>(
+      `${API_URL}/api/shipments`
+    );
+    const { shipments, orderById } = processApiShipments(data.shipments ?? []);
+    return { data: shipments, orderById, offline: isFromCache, cachedAt };
   } catch {
-    const cached = readCache<ApiShipment[]>(CACHE_KEYS.shipments);
-    const raw = cached?.data ?? [];
-    const { shipments, orderById } = processApiShipments(raw);
-    return { data: shipments, orderById, offline: true, cachedAt: cached?.cachedAt };
+    const { shipments, orderById } = processApiShipments([]);
+    return { data: shipments, orderById, offline: true };
   }
 }
 
@@ -105,7 +97,7 @@ export default function ShipmentsPage() {
   const [newShipmentError, setNewShipmentError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
-  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
 
   useEffect(() => {
     (async () => {
