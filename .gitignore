@@ -12,6 +12,10 @@ node_modules
 
 # testing
 /coverage
+/testing/test-results/
+/testing/playwright-report/
+/testing/.cache/
+server/src/__tests__/.mongo-uri.tmp
 
 # next.js
 /.next/
