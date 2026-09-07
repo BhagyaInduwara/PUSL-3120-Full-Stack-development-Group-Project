@@ -12,7 +12,8 @@
     "seed:data": "tsx src/scripts/seedMasterData.ts",
     "migrate:order-lineitems": "tsx src/scripts/migrateOrderLineItems.ts",
     "backfill:record-numbers": "tsx src/scripts/backfillRecordNumbers.ts",
-    "migrate:number-prefixes": "tsx src/scripts/addRecordNumberPrefixes.ts"
+    "migrate:number-prefixes": "tsx src/scripts/addRecordNumberPrefixes.ts",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --config tests/jest.config.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -27,8 +28,14 @@
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20",
+    "@types/supertest": "^7.2.1",
+    "jest": "^30.5.1",
+    "mongodb-memory-server": "^11.2.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.12",
     "tsx": "^4.19.2",
     "typescript": "^5"
   }
