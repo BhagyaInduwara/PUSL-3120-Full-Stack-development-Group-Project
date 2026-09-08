@@ -20,7 +20,7 @@ const customJestConfig = {
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   rootDir: ".",
   roots: ["<rootDir>/unit"],
-  testMatch: ["<rootDir>/unit/**/*.test.tsx"],
+  testMatch: ["<rootDir>/unit/**/*.test.{ts,tsx}"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/../src/$1",
   },
