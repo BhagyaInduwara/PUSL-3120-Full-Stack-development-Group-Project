@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
-import { connectDB } from "./config/db.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { userRouter } from "./routes/user.routes.js";
 import { customerRouter } from "./routes/customer.routes.js";
@@ -18,14 +17,16 @@ import { orderDraftRouter } from "./routes/orderDraft.routes.js";
 
 export const app = express();
 
-// Connected here (not just in server.ts) so the app is self-sufficient no
-// matter which entry point actually invokes it — server.ts for local dev
-// and traditional hosts, api/index.ts for Vercel's serverless runtime, or
-// this file directly if a platform's zero-config preset imports it as-is.
-// connectDB() caches its connection (see config/db.ts), so this top-level
-// await never re-connects on top of what server.ts/api/index.ts already
-// triggered — it just awaits the same shared promise.
-await connectDB();
+// Both real entry points (server.ts for local dev/traditional hosts,
+// api/index.ts for Vercel's serverless runtime) explicitly `await
+// connectDB()` themselves before ever routing a request to this app, and
+// connectDB() caches its connection (see config/db.ts) so calling it again
+// there is cheap. This file deliberately does NOT also connect at the top
+// level — a top-level `await` here would make this module ESM-only in a
+// way that broke importing `app` directly under Jest (needed by the
+// Supertest integration tests in src/__tests__), and Mongoose buffers
+// queries until connected regardless, so nothing here depends on the
+// connection being open yet.
 
 app.use(cors({ origin: env.clientOrigin, credentials: true }));
 app.use(express.json());
