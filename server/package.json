@@ -13,8 +13,7 @@
     "seed:data": "tsx src/scripts/seedMasterData.ts",
     "migrate:order-lineitems": "tsx src/scripts/migrateOrderLineItems.ts",
     "backfill:record-numbers": "tsx src/scripts/backfillRecordNumbers.ts",
-    "migrate:number-prefixes": "tsx src/scripts/addRecordNumberPrefixes.ts",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --config tests/jest.config.ts"
+    "migrate:number-prefixes": "tsx src/scripts/addRecordNumberPrefixes.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

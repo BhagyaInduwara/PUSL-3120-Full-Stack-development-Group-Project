@@ -1,23 +1,12 @@
 import request from "supertest";
-import type { Express } from "express";
-import { connectTestDB, clearTestDB, closeTestDB } from "../helpers/db.js";
-import { getAuthCookie } from "../helpers/auth.js";
+import { app } from "../app.js";
+import { authCookie } from "./helpers/auth.js";
 
-let app: Express;
-let cookie: string;
+const cookie = authCookie();
 
-beforeAll(async () => {
-  app = await connectTestDB();
-  cookie = getAuthCookie();
-});
-
-afterEach(async () => {
-  await clearTestDB();
-});
-
-afterAll(async () => {
-  await closeTestDB();
-});
+// Connecting/clearing collections between tests/disconnecting after the
+// suite is handled globally by setupTestDb.ts (setupFilesAfterEnv) — no
+// need to repeat that per file.
 
 /* ------------------------------------------------------------------ */
 /*  Helper: create a valid inventory item and return the response      */
