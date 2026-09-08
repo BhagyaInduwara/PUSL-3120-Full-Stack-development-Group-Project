@@ -24,4 +24,11 @@ module.exports = {
   setupFilesAfterEnv: ["<rootDir>/src/__tests__/setupTestDb.ts"],
   testTimeout: 30000,
   clearMocks: true,
+  // Every test file shares the ONE in-memory MongoDB instance started once
+  // in globalSetup.ts (that's the point — one Mongo binary, not five).
+  // Running test files in parallel workers would let them clear/write the
+  // same collections (and the shared record-number Counter) out from under
+  // each other — this surfaced as real, intermittent duplicate-key errors
+  // and cross-file data bleed once the suite grew past two files.
+  maxWorkers: 1,
 };
