@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:e2e": "playwright test --config=testing/playwright.config.ts",
-    "test:unit": "jest --config=testing/jest.config.js"
+    "test:unit": "jest --config=testing/jest.config.js",
+    "test:unit:watch": "jest --config=testing/jest.config.js --watch"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -23,6 +24,7 @@
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
     "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
