@@ -60,6 +60,20 @@ export async function createShipment(req: Request, res: Response): Promise<void>
 
 /** PUT /api/shipments/:id */
 export async function updateShipment(req: Request, res: Response): Promise<void> {
+  const existing = await Shipment.findById(req.params.id);
+  if (!existing) {
+    res.status(404).json({ error: "Shipment not found." });
+    return;
+  }
+  // Mirrors src/domain/Shipment.ts's canEdit getter ("Delivered shipments
+  // are finalized and cannot be modified") — that was previously only
+  // enforced by hiding the Edit button in the UI, so a direct API call
+  // could still silently rewrite a delivered shipment's date/status.
+  if (existing.status === "Delivered") {
+    res.status(409).json({ error: "This shipment has already been delivered and can no longer be modified." });
+    return;
+  }
+
   const patch: Record<string, unknown> = {};
 
   if (req.body?.orderId !== undefined) {
