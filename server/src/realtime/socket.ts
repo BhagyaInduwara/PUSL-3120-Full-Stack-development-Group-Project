@@ -64,10 +64,25 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
   return io;
 }
 
-/** For controllers to emit events from (added in a later task) — throws if called before initSocketServer() has run. */
+/** For code that genuinely requires a live socket server (none yet) — throws if called before initSocketServer() has run. */
 export function getSocketServer(): SocketIOServer {
   if (!io) {
     throw new Error("Socket.io server not initialized — initSocketServer() must run before getSocketServer() is called.");
   }
   return io;
+}
+
+/**
+ * Broadcasts a realtime event to every connected client. This is what
+ * controllers should call for a "tell the other clients this changed"
+ * notification (see order.controller.ts / orderDraft.controller.ts) — it
+ * silently no-ops if the socket server hasn't been initialized, rather than
+ * throwing like getSocketServer() does. That matters because server.ts is
+ * the only entry point that calls initSocketServer() (see its own comment);
+ * the Supertest integration tests import `app` directly and exercise
+ * controllers without ever starting a socket server, so a throwing emit
+ * would turn a plain REST write into a 500 under every one of those tests.
+ */
+export function emitEvent(event: string, payload: unknown): void {
+  io?.emit(event, payload);
 }
