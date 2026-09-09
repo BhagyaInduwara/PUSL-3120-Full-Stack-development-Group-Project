@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { Order, ORDER_STATUSES, type OrderStatus } from "../models/Order.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
+import { emitEvent } from "../utils/socket.js";
 
 interface OrderLineItemBody {
   product: string;
@@ -63,6 +64,9 @@ export async function createOrder(req: Request, res: Response): Promise<void> {
 
   const number = await generateRecordNumber("order", new Date());
   const order = await Order.create({ ...req.body, number });
+
+  emitEvent("order:created", order);
+
   res.status(201).json(order);
 }
 
@@ -94,6 +98,8 @@ export async function updateOrder(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  emitEvent("order:updated", order);
+
   res.json(order);
 }
 
@@ -108,6 +114,8 @@ export async function deleteOrder(req: Request, res: Response): Promise<void> {
     res.status(404).json({ error: "Order not found." });
     return;
   }
+
+  emitEvent("order:deleted", { id: req.params.id });
 
   res.json({ ok: true });
 }
@@ -137,6 +145,8 @@ export async function patchOrderStatus(req: Request, res: Response): Promise<voi
     res.status(404).json({ error: "Order not found." });
     return;
   }
+
+  emitEvent("order:updated", order);
 
   res.json(order);
 }
