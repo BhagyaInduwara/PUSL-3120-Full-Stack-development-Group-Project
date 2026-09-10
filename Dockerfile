@@ -16,6 +16,15 @@ COPY . .
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# NEXT_PUBLIC_ vars are baked into the browser bundle at build time, not
+# read at container startup — must be passed as a build arg (see
+# docker-compose.yml). Left empty by default so src/lib/socket.ts falls
+# back to "same origin" (correct behind the nginx reverse proxy); override
+# only for a topology where the backend has its own separately-reachable
+# address.
+ARG NEXT_PUBLIC_SOCKET_URL=""
+ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+
 # Build Next.js in standalone mode
 RUN npm run build
 
