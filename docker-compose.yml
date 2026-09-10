@@ -1,0 +1,72 @@
+# Wires together the three pieces that already existed independently
+# (Dockerfile, server/Dockerfile, nginx/nginx.conf) into one runnable
+# stack. nginx is the single public entry point (port 80) — client and
+# server aren't published directly, matching nginx.conf's own design
+# (it proxies /, /api/, /socket.io/ and /health to the right container).
+#
+# MongoDB stays MongoDB Atlas (the real cluster this project already uses
+# in every other environment — see CLAUDE.md "Backend (Express +
+# Mongoose)"), not a local `mongo` service, so MONGODB_URI in server/.env
+# must point at Atlas even when running under Compose.
+#
+# JWT_SECRET must be identical for the client and server containers (it's
+# how a token signed by one side verifies on the other — see
+# CLAUDE.md "Authentication & Users"). Both services load it from the same
+# server/.env file below rather than keeping two separate copies in sync
+# by hand.
+#
+# Setup: `cp server/.env.example server/.env` and fill in MONGODB_URI/
+# JWT_SECRET (PORT/CLIENT_ORIGIN below override server/.env's own
+# defaults for the Compose network) — then `docker compose up --build`.
+
+services:
+  server:
+    build:
+      context: ./server
+    env_file:
+      - ./server/.env
+    environment:
+      PORT: 4000
+      # nginx is what the browser actually talks to — CORS/Socket.io's
+      # handshake check needs to see that origin, not the container's own
+      # localhost:3000 default from server/.env.
+      CLIENT_ORIGIN: http://localhost
+    expose:
+      - "4000"
+    restart: unless-stopped
+
+  client:
+    build:
+      context: .
+      args:
+        # Empty so src/lib/socket.ts falls back to "same origin" — the
+        # browser connects to nginx, which proxies /socket.io/ to `server`
+        # (see nginx/nginx.conf). Baked in at build time; see the root
+        # Dockerfile's own comment for why this can't be a runtime env var.
+        NEXT_PUBLIC_SOCKET_URL: ""
+    env_file:
+      # Only JWT_SECRET is actually read here (see the header comment
+      # above) — the other vars in this file (MONGODB_URI, PORT,
+      # CLIENT_ORIGIN) are simply unused by the Next.js app.
+      - ./server/.env
+    environment:
+      # Server-to-server only (src/app/api/[...path]/route.ts and the
+      # auth/users routes) — reaches `server` over the Compose network,
+      # not through nginx.
+      BACKEND_URL: http://server:4000
+    expose:
+      - "3000"
+    depends_on:
+      - server
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - client
+      - server
+    restart: unless-stopped

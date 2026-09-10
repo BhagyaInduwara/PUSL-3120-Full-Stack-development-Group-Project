@@ -124,6 +124,7 @@ export async function deleteOrder(req: Request, res: Response): Promise<void> {
   }
 
   emitEvent("order:deleted", { id: req.params.id });
+  emitEvent(ORDER_CHANGED_EVENT, { id: req.params.id });
 
   res.json({ ok: true });
 }

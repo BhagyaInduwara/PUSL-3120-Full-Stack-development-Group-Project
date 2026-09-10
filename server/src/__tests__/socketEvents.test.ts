@@ -95,6 +95,7 @@ describe("Real-Time Socket Events — Sales Pipeline (Chunk 4 Verification)", ()
 
       expect(res.status).toBe(200);
       expect(mockEmit).toHaveBeenCalledWith("order:deleted", { id: order._id.toString() });
+      expect(mockEmit).toHaveBeenCalledWith("order:changed", { id: order._id.toString() });
     });
   });
 
