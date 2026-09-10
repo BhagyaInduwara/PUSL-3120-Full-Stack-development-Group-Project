@@ -163,6 +163,9 @@ describe("Real-Time Socket Events — Sales Pipeline (Chunk 4 Verification)", ()
         orderId: order._id.toString(),
         status: "Draft",
       }));
+      expect(mockEmit).toHaveBeenCalledWith("invoice:changed", expect.objectContaining({
+        orderId: order._id.toString(),
+      }));
     });
 
     it("emits 'invoice:paid' when marked as paid", async () => {
@@ -186,6 +189,10 @@ describe("Real-Time Socket Events — Sales Pipeline (Chunk 4 Verification)", ()
 
       expect(res.status).toBe(200);
       expect(mockEmit).toHaveBeenCalledWith("invoice:paid", expect.objectContaining({
+        id: invoice._id.toString(),
+        status: "Paid",
+      }));
+      expect(mockEmit).toHaveBeenCalledWith("invoice:changed", expect.objectContaining({
         id: invoice._id.toString(),
         status: "Paid",
       }));

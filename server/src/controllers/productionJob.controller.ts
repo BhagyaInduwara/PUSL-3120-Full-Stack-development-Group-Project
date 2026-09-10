@@ -2,20 +2,14 @@ import { Request, Response } from "express";
 import ProductionJob from "../models/ProductionJob.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
+import { emitEvent } from "../utils/socket.js";
 
-// --- REAL-TIME EVENT HELPER ---
-// Wraps socket emits in a try/catch so failures don't block the HTTP transaction
-const safeEmit = (req: Request, event: string, data: any) => {
-  try {
-    const io = req.app.get("io");
-    if (io) {
-      io.emit(event, data);
-    }
-  } catch (error) {
-    console.error(`[Socket Error] Failed to emit ${event}:`, error);
-  }
-};
-// ------------------------------
+// Emitted on every successful create/update/status-change, so every
+// connected client's Production board can refetch instead of needing a
+// manual refresh — see src/app/(app)/production/page.tsx's useLiveEvent
+// call, and shipment.controller.ts's SHIPMENT_CHANGED_EVENT for the same
+// pattern applied to Shipments.
+export const PRODUCTION_JOB_CHANGED_EVENT = "production_job:changed";
 
 // Get all production jobs
 export const getProductionJobs = asyncHandler(async (req: Request, res: Response) => {
@@ -51,6 +45,9 @@ export const createProductionJob = asyncHandler(async (req: Request, res: Respon
     progress
   });
 
+  emitEvent("production_job:created", { productionJob: newJob });
+  emitEvent(PRODUCTION_JOB_CHANGED_EVENT, { productionJob: newJob });
+
   res.status(201).json({ productionJob: newJob });
 });
 
@@ -69,8 +66,8 @@ export const updateProductionJob = asyncHandler(async (req: Request, res: Respon
     return;
   }
   
-  // Real-time event: Production Job Updated
-  safeEmit(req, "production_job:updated", { productionJob: updatedJob });
+  emitEvent("production_job:updated", { productionJob: updatedJob });
+  emitEvent(PRODUCTION_JOB_CHANGED_EVENT, { productionJob: updatedJob });
 
   res.status(200).json({ productionJob: updatedJob });
 });
@@ -94,8 +91,8 @@ export const updateProductionJobStatus = asyncHandler(async (req: Request, res: 
     return;
   }
 
-  // Real-time event: Production Job Updated (Stage/Progress progression)
-  safeEmit(req, "production_job:updated", { productionJob: updatedJob });
+  emitEvent("production_job:updated", { productionJob: updatedJob });
+  emitEvent(PRODUCTION_JOB_CHANGED_EVENT, { productionJob: updatedJob });
 
   res.status(200).json({ productionJob: updatedJob });
 });

@@ -4,6 +4,11 @@ import { Invoice, INVOICE_STATUSES, toPublicInvoice } from "../models/Invoice.js
 import { generateRecordNumber } from "../utils/recordNumber.js";
 import { emitEvent } from "../utils/socket.js";
 
+// Emitted on every successful create/update/mark-paid, so every connected
+// client's Invoicing screen can refetch instead of needing a manual
+// refresh — mirrors order.controller.ts's ORDER_CHANGED_EVENT.
+export const INVOICE_CHANGED_EVENT = "invoice:changed";
+
 function isValidStatus(value: unknown): value is (typeof INVOICE_STATUSES)[number] {
   return typeof value === "string" && (INVOICE_STATUSES as readonly string[]).includes(value);
 }
@@ -47,6 +52,7 @@ export async function createInvoice(req: Request, res: Response): Promise<void> 
 
   const publicInvoice = toPublicInvoice(invoice);
   emitEvent("invoice:created", publicInvoice);
+  emitEvent(INVOICE_CHANGED_EVENT, publicInvoice);
 
   res.status(201).json({ invoice: publicInvoice });
 }
@@ -80,6 +86,7 @@ export async function updateInvoice(req: Request, res: Response): Promise<void> 
 
   const publicInvoice = toPublicInvoice(invoice);
   emitEvent("invoice:updated", publicInvoice);
+  emitEvent(INVOICE_CHANGED_EVENT, publicInvoice);
 
   res.json({ invoice: publicInvoice });
 }
@@ -95,6 +102,7 @@ export async function markInvoicePaid(req: Request, res: Response): Promise<void
   const publicInvoice = toPublicInvoice(invoice);
   emitEvent("invoice:paid", publicInvoice);
   emitEvent("invoice:updated", publicInvoice);
+  emitEvent(INVOICE_CHANGED_EVENT, publicInvoice);
 
   res.json({ invoice: publicInvoice });
 }
