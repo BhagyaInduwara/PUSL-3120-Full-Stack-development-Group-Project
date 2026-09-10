@@ -1,0 +1,12 @@
+node_modules
+.next
+server
+.git
+.env*
+npm-debug.log*
+coverage
+.claude
+docs
+*.md
+cookies.txt
+*.sql

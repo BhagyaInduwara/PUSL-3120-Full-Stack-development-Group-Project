@@ -3,6 +3,20 @@ import { Types } from "mongoose";
 import { Shipment, SHIPMENT_STATUSES, toPublicShipment } from "../models/Shipment.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
 
+// --- REAL-TIME EVENT HELPER ---
+// Wraps socket emits in a try/catch so failures don't block the HTTP transaction
+const safeEmit = (req: Request, event: string, data: any) => {
+  try {
+    const io = req.app.get("io");
+    if (io) {
+      io.emit(event, data);
+    }
+  } catch (error) {
+    console.error(`[Socket Error] Failed to emit ${event}:`, error);
+  }
+};
+// ------------------------------
+
 function isValidStatus(value: unknown): value is (typeof SHIPMENT_STATUSES)[number] {
   return typeof value === "string" && (SHIPMENT_STATUSES as readonly string[]).includes(value);
 }
@@ -55,7 +69,13 @@ export async function createShipment(req: Request, res: Response): Promise<void>
   if (shipment.invoiceId) {
     shipment = await shipment.populate("invoiceId", "number");
   }
-  res.status(201).json({ shipment: toPublicShipment(shipment) });
+  
+  const publicShipment = toPublicShipment(shipment);
+  
+  // Real-time event: Shipment Created
+  safeEmit(req, "shipment:created", { shipment: publicShipment });
+
+  res.status(201).json({ shipment: publicShipment });
 }
 
 /** PUT /api/shipments/:id */
@@ -104,11 +124,20 @@ export async function updateShipment(req: Request, res: Response): Promise<void>
     { $set: patch },
     { new: true, runValidators: true }
   ).populate("orderId").populate("invoiceId", "number");
+  
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
   }
-  res.json({ shipment: toPublicShipment(shipment) });
+  
+  const publicShipment = toPublicShipment(shipment);
+
+  // Real-time event: Emit status change if the status was updated in this patch
+  if (patch.status) {
+    safeEmit(req, "shipment:status_changed", { shipment: publicShipment });
+  }
+
+  res.json({ shipment: publicShipment });
 }
 
 /** PATCH /api/shipments/:id/dispatch — no body needed. */
@@ -118,11 +147,18 @@ export async function dispatchShipment(req: Request, res: Response): Promise<voi
     { $set: { status: "Dispatched" } },
     { new: true }
   ).populate("orderId").populate("invoiceId", "number");
+  
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
   }
-  res.json({ shipment: toPublicShipment(shipment) });
+
+  const publicShipment = toPublicShipment(shipment);
+  
+  // Real-time event: Status changed (Dispatched)
+  safeEmit(req, "shipment:status_changed", { shipment: publicShipment });
+
+  res.json({ shipment: publicShipment });
 }
 
 /** PATCH /api/shipments/:id/deliver — no body needed. */
@@ -132,9 +168,16 @@ export async function deliverShipment(req: Request, res: Response): Promise<void
     { $set: { status: "Delivered" } },
     { new: true }
   ).populate("orderId").populate("invoiceId", "number");
+  
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
   }
-  res.json({ shipment: toPublicShipment(shipment) });
+
+  const publicShipment = toPublicShipment(shipment);
+  
+  // Real-time event: Status changed (Delivered)
+  safeEmit(req, "shipment:status_changed", { shipment: publicShipment });
+
+  res.json({ shipment: publicShipment });
 }

@@ -3,6 +3,8 @@ import { IncomingOrderDraft } from "../models/IncomingOrderDraft.js";
 import { Order } from "../models/Order.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
 import { emitEvent } from "../utils/socket.js";
+import { emitEvent } from "../realtime/socket.js";
+import { ORDER_CHANGED_EVENT } from "./order.controller.js";
 
 // ---------------------------------------------------------------------------
 // GET /api/order-drafts
@@ -112,6 +114,10 @@ export async function approveDraft(req: Request, res: Response): Promise<void> {
   emitEvent("order_draft:approved", { draftId: req.params.id, order });
   // 2. Notify that a new confirmed order was added to the pipeline
   emitEvent("order:created", order);
+  // A confirmed order just appeared on the board the same way a freshly
+  // created one does — reuse the same event so the Sales & Order Board
+  // has one code path for "some order just changed," not two.
+  emitEvent(ORDER_CHANGED_EVENT, { order });
 
   res.status(201).json(order);
 }
