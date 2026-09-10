@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Invoice, INVOICE_STATUSES, toPublicInvoice } from "../models/Invoice.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
+import { emitEvent } from "../utils/socket.js";
 
 function isValidStatus(value: unknown): value is (typeof INVOICE_STATUSES)[number] {
   return typeof value === "string" && (INVOICE_STATUSES as readonly string[]).includes(value);
@@ -43,7 +44,11 @@ export async function createInvoice(req: Request, res: Response): Promise<void> 
     issueDate: req.body?.issueDate,
     dueDate: req.body?.dueDate,
   });
-  res.status(201).json({ invoice: toPublicInvoice(invoice) });
+
+  const publicInvoice = toPublicInvoice(invoice);
+  emitEvent("invoice:created", publicInvoice);
+
+  res.status(201).json({ invoice: publicInvoice });
 }
 
 /** PUT /api/invoices/:id */
@@ -72,7 +77,11 @@ export async function updateInvoice(req: Request, res: Response): Promise<void> 
     res.status(404).json({ error: "Invoice not found." });
     return;
   }
-  res.json({ invoice: toPublicInvoice(invoice) });
+
+  const publicInvoice = toPublicInvoice(invoice);
+  emitEvent("invoice:updated", publicInvoice);
+
+  res.json({ invoice: publicInvoice });
 }
 
 /** PATCH /api/invoices/:id/mark-paid — no body needed. */
@@ -82,5 +91,10 @@ export async function markInvoicePaid(req: Request, res: Response): Promise<void
     res.status(404).json({ error: "Invoice not found." });
     return;
   }
-  res.json({ invoice: toPublicInvoice(invoice) });
+
+  const publicInvoice = toPublicInvoice(invoice);
+  emitEvent("invoice:paid", publicInvoice);
+  emitEvent("invoice:updated", publicInvoice);
+
+  res.json({ invoice: publicInvoice });
 }
