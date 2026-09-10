@@ -1,6 +1,14 @@
 import type { Request, Response } from "express";
 import { Order, ORDER_STATUSES, type OrderStatus } from "../models/Order.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
+import { emitEvent } from "../realtime/socket.js";
+
+// Emitted whenever an order is created or moves to a new status, so every
+// connected client's Sales & Order Board can update in place instead of
+// needing a manual refresh — see sales/page.tsx's useLiveEvent("order:changed", ...)
+// on the frontend. Also emitted from orderDraft.controller.ts's approveDraft,
+// since approving a draft creates a real order the same way.
+export const ORDER_CHANGED_EVENT = "order:changed";
 
 interface OrderLineItemBody {
   product: string;
@@ -63,6 +71,7 @@ export async function createOrder(req: Request, res: Response): Promise<void> {
 
   const number = await generateRecordNumber("order", new Date());
   const order = await Order.create({ ...req.body, number });
+  emitEvent(ORDER_CHANGED_EVENT, { order });
   res.status(201).json(order);
 }
 
@@ -138,5 +147,6 @@ export async function patchOrderStatus(req: Request, res: Response): Promise<voi
     return;
   }
 
+  emitEvent(ORDER_CHANGED_EVENT, { order });
   res.json(order);
 }
