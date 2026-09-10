@@ -3,6 +3,20 @@ import ProductionJob from "../models/ProductionJob.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
 
+// --- REAL-TIME EVENT HELPER ---
+// Wraps socket emits in a try/catch so failures don't block the HTTP transaction
+const safeEmit = (req: Request, event: string, data: any) => {
+  try {
+    const io = req.app.get("io");
+    if (io) {
+      io.emit(event, data);
+    }
+  } catch (error) {
+    console.error(`[Socket Error] Failed to emit ${event}:`, error);
+  }
+};
+// ------------------------------
+
 // Get all production jobs
 export const getProductionJobs = asyncHandler(async (req: Request, res: Response) => {
   const jobs = await ProductionJob.find();
@@ -55,6 +69,9 @@ export const updateProductionJob = asyncHandler(async (req: Request, res: Respon
     return;
   }
   
+  // Real-time event: Production Job Updated
+  safeEmit(req, "production_job:updated", { productionJob: updatedJob });
+
   res.status(200).json({ productionJob: updatedJob });
 });
 
@@ -76,6 +93,9 @@ export const updateProductionJobStatus = asyncHandler(async (req: Request, res: 
     res.status(404).json({ error: "Production job not found" });
     return;
   }
+
+  // Real-time event: Production Job Updated (Stage/Progress progression)
+  safeEmit(req, "production_job:updated", { productionJob: updatedJob });
 
   res.status(200).json({ productionJob: updatedJob });
 });
