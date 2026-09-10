@@ -2,20 +2,13 @@ import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Shipment, SHIPMENT_STATUSES, toPublicShipment } from "../models/Shipment.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
+import { emitEvent } from "../utils/socket.js";
 
-// --- REAL-TIME EVENT HELPER ---
-// Wraps socket emits in a try/catch so failures don't block the HTTP transaction
-const safeEmit = (req: Request, event: string, data: any) => {
-  try {
-    const io = req.app.get("io");
-    if (io) {
-      io.emit(event, data);
-    }
-  } catch (error) {
-    console.error(`[Socket Error] Failed to emit ${event}:`, error);
-  }
-};
-// ------------------------------
+// Emitted on every successful create/update/dispatch/deliver, so every
+// connected client's Shipments screen can refetch instead of needing a
+// manual refresh — see sales/page.tsx's "order:changed" listener for the
+// same pattern (src/app/(app)/shipments/page.tsx's own useLiveEvent call).
+export const SHIPMENT_CHANGED_EVENT = "shipment:changed";
 
 function isValidStatus(value: unknown): value is (typeof SHIPMENT_STATUSES)[number] {
   return typeof value === "string" && (SHIPMENT_STATUSES as readonly string[]).includes(value);
@@ -71,9 +64,9 @@ export async function createShipment(req: Request, res: Response): Promise<void>
   }
   
   const publicShipment = toPublicShipment(shipment);
-  
-  // Real-time event: Shipment Created
-  safeEmit(req, "shipment:created", { shipment: publicShipment });
+
+  emitEvent("shipment:created", { shipment: publicShipment });
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
 
   res.status(201).json({ shipment: publicShipment });
 }
@@ -132,10 +125,14 @@ export async function updateShipment(req: Request, res: Response): Promise<void>
   
   const publicShipment = toPublicShipment(shipment);
 
-  // Real-time event: Emit status change if the status was updated in this patch
+  // Emit the granular status event only if the status was actually updated
+  // in this patch, but the coarse "changed" event fires on any successful
+  // update — a PUT that only changes e.g. the date still needs the
+  // Shipments screen to refetch.
   if (patch.status) {
-    safeEmit(req, "shipment:status_changed", { shipment: publicShipment });
+    emitEvent("shipment:status_changed", { shipment: publicShipment });
   }
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
 
   res.json({ shipment: publicShipment });
 }
@@ -154,9 +151,9 @@ export async function dispatchShipment(req: Request, res: Response): Promise<voi
   }
 
   const publicShipment = toPublicShipment(shipment);
-  
-  // Real-time event: Status changed (Dispatched)
-  safeEmit(req, "shipment:status_changed", { shipment: publicShipment });
+
+  emitEvent("shipment:status_changed", { shipment: publicShipment });
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
 
   res.json({ shipment: publicShipment });
 }
@@ -175,9 +172,9 @@ export async function deliverShipment(req: Request, res: Response): Promise<void
   }
 
   const publicShipment = toPublicShipment(shipment);
-  
-  // Real-time event: Status changed (Delivered)
-  safeEmit(req, "shipment:status_changed", { shipment: publicShipment });
+
+  emitEvent("shipment:status_changed", { shipment: publicShipment });
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
 
   res.json({ shipment: publicShipment });
 }

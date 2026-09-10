@@ -11,6 +11,7 @@ import { ProductionJob, type JobStatus } from "@/domain/ProductionJob";
 
 import { API_URL } from "@/lib/apiUrl";
 import { fetchWithCache } from "@/lib/offline";
+import { useLiveEvent } from "@/hooks/useLiveEvent";
 
 interface ApiProductionJob {
   _id: string;
@@ -98,6 +99,21 @@ export default function ProductionPage() {
       }
     })();
   }, []);
+
+  async function refreshJobs() {
+    setJobs(await fetchJobs());
+  }
+
+  /**
+   * Keeps the board in sync when another client creates, updates, or moves
+   * a job's status — productionJob.controller.ts emits
+   * "production_job:changed" over the shared Socket.io connection whenever
+   * any of those happen server-side. Same "just refetch" approach as
+   * sales/page.tsx's "order:changed" listener.
+   */
+  useLiveEvent("production_job:changed", () => {
+    refreshJobs();
+  });
 
   async function handleSaveJob(patch: Partial<{ product: string; qty: number; due: string; orderNumber?: string; customer?: string; progress?: number }>) {
     if (!selectedJob) return;
