@@ -10,6 +10,7 @@ import { Shipment, type ShipmentEditableFields, type ShipmentStatus } from "@/do
 import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 import { API_URL } from "@/lib/apiUrl";
 import { fetchWithCache } from "@/lib/offline";
+import { useLiveEvent } from "@/hooks/useLiveEvent";
 
 function fmtDate(value: string): string {
   if (!value) return value;
@@ -120,6 +121,17 @@ export default function ShipmentsPage() {
     setOffline(result.offline);
     setCachedAt(result.offline ? result.cachedAt ?? null : null);
   }
+
+  /**
+   * Keeps the table in sync when another client creates, updates,
+   * dispatches, or delivers a shipment — shipment.controller.ts emits
+   * "shipment:changed" over the shared Socket.io connection whenever any
+   * of those happen server-side. Same "just refetch" approach as
+   * sales/page.tsx's "order:changed" listener.
+   */
+  useLiveEvent("shipment:changed", () => {
+    refreshShipments();
+  });
 
   async function handleSave(patch: Partial<ShipmentEditableFields>) {
     if (!selectedShipment) return;

@@ -2,6 +2,8 @@ import type { Request, Response } from "express";
 import { IncomingOrderDraft } from "../models/IncomingOrderDraft.js";
 import { Order } from "../models/Order.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
+import { emitEvent } from "../utils/socket.js";
+import { ORDER_CHANGED_EVENT } from "./order.controller.js";
 
 // ---------------------------------------------------------------------------
 // GET /api/order-drafts
@@ -30,6 +32,7 @@ export async function getDraft(req: Request, res: Response): Promise<void> {
 // ---------------------------------------------------------------------------
 export async function createDraft(req: Request, res: Response): Promise<void> {
   const draft = await IncomingOrderDraft.create(req.body);
+  emitEvent("order_draft:created", draft);
   res.status(201).json(draft);
 }
 
@@ -48,6 +51,8 @@ export async function updateDraft(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  emitEvent("order_draft:updated", draft);
+
   res.json(draft);
 }
 
@@ -61,6 +66,8 @@ export async function deleteDraft(req: Request, res: Response): Promise<void> {
     res.status(404).json({ error: "Draft not found." });
     return;
   }
+
+  emitEvent("order_draft:deleted", { id: req.params.id });
 
   res.json({ ok: true });
 }
@@ -100,6 +107,16 @@ export async function approveDraft(req: Request, res: Response): Promise<void> {
 
   // Delete the draft AFTER the Order is successfully created
   await IncomingOrderDraft.findByIdAndDelete(req.params.id);
+
+  // Broadcast real-time events:
+  // 1. Notify that the draft is approved and resolved
+  emitEvent("order_draft:approved", { draftId: req.params.id, order });
+  // 2. Notify that a new confirmed order was added to the pipeline
+  emitEvent("order:created", order);
+  // A confirmed order just appeared on the board the same way a freshly
+  // created one does — reuse the same event so the Sales & Order Board
+  // has one code path for "some order just changed," not two.
+  emitEvent(ORDER_CHANGED_EVENT, { order });
 
   res.status(201).json(order);
 }

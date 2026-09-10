@@ -1,8 +1,28 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import SalesPage from "@/app/(app)/sales/page";
+import { SocketProvider } from "@/components/providers/SocketProvider";
 import { writeCacheEnvelope, readCacheEnvelope } from "@/lib/offline/fetchWithCache";
 import { API_URL } from "@/lib/apiUrl";
+
+// SalesPage calls useLiveEvent("order:changed", ...), which needs a
+// SocketProvider ancestor — mocked here (rather than a real socket.io-client
+// connection attempt) the same way testing/unit/SocketProvider.test.tsx does.
+jest.mock("@/lib/socket", () => ({
+  getSocket: () => ({
+    connected: false,
+    on: jest.fn(),
+    off: jest.fn(),
+  }),
+}));
+
+function renderSalesPage() {
+  return render(
+    <SocketProvider>
+      <SalesPage />
+    </SocketProvider>
+  );
+}
 
 describe("Sales Page — Offline Fallback & Cache Resiliency", () => {
   const cachedOrdersPayload = [
@@ -52,7 +72,7 @@ describe("Sales Page — Offline Fallback & Cache Resiliency", () => {
     global.fetch = jest.fn().mockRejectedValue(new TypeError("Failed to fetch (Network error)"));
 
     // 3. Render SalesPage
-    render(<SalesPage />);
+    renderSalesPage();
 
     // 4. Verify that cached orders are displayed on the board
     await waitFor(() => {
@@ -72,7 +92,7 @@ describe("Sales Page — Offline Fallback & Cache Resiliency", () => {
     // Simulate network error
     global.fetch = jest.fn().mockRejectedValue(new Error("Network disconnected"));
 
-    render(<SalesPage />);
+    renderSalesPage();
 
     // Verify offline badge is rendered in header
     await waitFor(() => {
@@ -116,7 +136,7 @@ describe("Sales Page — Offline Fallback & Cache Resiliency", () => {
       } as Response);
     });
 
-    render(<SalesPage />);
+    renderSalesPage();
 
     await waitFor(() => {
       expect(screen.getByText("Online Live Client")).toBeInTheDocument();

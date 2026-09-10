@@ -2,6 +2,13 @@ import type { Request, Response } from "express";
 import { Types } from "mongoose";
 import { Shipment, SHIPMENT_STATUSES, toPublicShipment } from "../models/Shipment.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
+import { emitEvent } from "../utils/socket.js";
+
+// Emitted on every successful create/update/dispatch/deliver, so every
+// connected client's Shipments screen can refetch instead of needing a
+// manual refresh — see sales/page.tsx's "order:changed" listener for the
+// same pattern (src/app/(app)/shipments/page.tsx's own useLiveEvent call).
+export const SHIPMENT_CHANGED_EVENT = "shipment:changed";
 
 function isValidStatus(value: unknown): value is (typeof SHIPMENT_STATUSES)[number] {
   return typeof value === "string" && (SHIPMENT_STATUSES as readonly string[]).includes(value);
@@ -55,7 +62,13 @@ export async function createShipment(req: Request, res: Response): Promise<void>
   if (shipment.invoiceId) {
     shipment = await shipment.populate("invoiceId", "number");
   }
-  res.status(201).json({ shipment: toPublicShipment(shipment) });
+  
+  const publicShipment = toPublicShipment(shipment);
+
+  emitEvent("shipment:created", { shipment: publicShipment });
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
+
+  res.status(201).json({ shipment: publicShipment });
 }
 
 /** PUT /api/shipments/:id */
@@ -104,11 +117,24 @@ export async function updateShipment(req: Request, res: Response): Promise<void>
     { $set: patch },
     { new: true, runValidators: true }
   ).populate("orderId").populate("invoiceId", "number");
+  
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
   }
-  res.json({ shipment: toPublicShipment(shipment) });
+  
+  const publicShipment = toPublicShipment(shipment);
+
+  // Emit the granular status event only if the status was actually updated
+  // in this patch, but the coarse "changed" event fires on any successful
+  // update — a PUT that only changes e.g. the date still needs the
+  // Shipments screen to refetch.
+  if (patch.status) {
+    emitEvent("shipment:status_changed", { shipment: publicShipment });
+  }
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
+
+  res.json({ shipment: publicShipment });
 }
 
 /** PATCH /api/shipments/:id/dispatch — no body needed. */
@@ -118,11 +144,18 @@ export async function dispatchShipment(req: Request, res: Response): Promise<voi
     { $set: { status: "Dispatched" } },
     { new: true }
   ).populate("orderId").populate("invoiceId", "number");
+  
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
   }
-  res.json({ shipment: toPublicShipment(shipment) });
+
+  const publicShipment = toPublicShipment(shipment);
+
+  emitEvent("shipment:status_changed", { shipment: publicShipment });
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
+
+  res.json({ shipment: publicShipment });
 }
 
 /** PATCH /api/shipments/:id/deliver — no body needed. */
@@ -132,9 +165,16 @@ export async function deliverShipment(req: Request, res: Response): Promise<void
     { $set: { status: "Delivered" } },
     { new: true }
   ).populate("orderId").populate("invoiceId", "number");
+  
   if (!shipment) {
     res.status(404).json({ error: "Shipment not found." });
     return;
   }
-  res.json({ shipment: toPublicShipment(shipment) });
+
+  const publicShipment = toPublicShipment(shipment);
+
+  emitEvent("shipment:status_changed", { shipment: publicShipment });
+  emitEvent(SHIPMENT_CHANGED_EVENT, { shipment: publicShipment });
+
+  res.json({ shipment: publicShipment });
 }
