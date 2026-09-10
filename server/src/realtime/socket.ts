@@ -3,6 +3,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { parse as parseCookie } from "cookie";
 import { verifyToken, SESSION_COOKIE_NAME, type JwtPayload } from "../utils/jwt.js";
 import { env } from "../config/env.js";
+import { setIO } from "../utils/socket.js";
 
 /**
  * Socket.io server infrastructure — attaches to the same HTTP server
@@ -38,6 +39,13 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
     },
   });
 
+  // Registers this server as utils/socket.ts's broadcast target, so every
+  // controller's emitEvent("order:created", ...) call (imported from
+  // utils/socket.js, not this file) actually reaches connected clients
+  // instead of silently no-op'ing — see that module's own comment for why
+  // it no-ops when nothing has called setIO() yet.
+  setIO(io);
+
   io.use((socket, next) => {
     const cookieHeader = socket.handshake.headers.cookie;
     const token = cookieHeader ? parseCookie(cookieHeader)[SESSION_COOKIE_NAME] : undefined;
@@ -64,25 +72,16 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
   return io;
 }
 
-/** For code that genuinely requires a live socket server (none yet) — throws if called before initSocketServer() has run. */
+/**
+ * For code that genuinely requires a live socket server (none yet) —
+ * throws if called before initSocketServer() has run. To broadcast an
+ * event, use emitEvent() from utils/socket.js instead (see setIO() above)
+ * — it's the one every controller already calls, and it no-ops safely
+ * when nothing's initialized rather than throwing.
+ */
 export function getSocketServer(): SocketIOServer {
   if (!io) {
     throw new Error("Socket.io server not initialized — initSocketServer() must run before getSocketServer() is called.");
   }
   return io;
-}
-
-/**
- * Broadcasts a realtime event to every connected client. This is what
- * controllers should call for a "tell the other clients this changed"
- * notification (see order.controller.ts / orderDraft.controller.ts) — it
- * silently no-ops if the socket server hasn't been initialized, rather than
- * throwing like getSocketServer() does. That matters because server.ts is
- * the only entry point that calls initSocketServer() (see its own comment);
- * the Supertest integration tests import `app` directly and exercise
- * controllers without ever starting a socket server, so a throwing emit
- * would turn a plain REST write into a 500 under every one of those tests.
- */
-export function emitEvent(event: string, payload: unknown): void {
-  io?.emit(event, payload);
 }

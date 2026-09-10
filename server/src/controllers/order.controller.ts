@@ -2,7 +2,6 @@ import type { Request, Response } from "express";
 import { Order, ORDER_STATUSES, type OrderStatus } from "../models/Order.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
 import { emitEvent } from "../utils/socket.js";
-import { emitEvent } from "../realtime/socket.js";
 
 // Emitted whenever an order is created or moves to a new status, so every
 // connected client's Sales & Order Board can update in place instead of

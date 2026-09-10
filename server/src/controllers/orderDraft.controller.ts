@@ -3,7 +3,6 @@ import { IncomingOrderDraft } from "../models/IncomingOrderDraft.js";
 import { Order } from "../models/Order.js";
 import { generateRecordNumber } from "../utils/recordNumber.js";
 import { emitEvent } from "../utils/socket.js";
-import { emitEvent } from "../realtime/socket.js";
 import { ORDER_CHANGED_EVENT } from "./order.controller.js";
 
 // ---------------------------------------------------------------------------
