@@ -1,0 +1,55 @@
+name: CI
+
+# Environment setup only for now (checkout, Node.js, install both
+# package.json's dependencies) — the actual test-running steps
+# (server Jest+Supertest, frontend Jest+RTL, Playwright E2E) get added on
+# top of this once the E2E job's Atlas secrets are set up. See the TODO
+# block at the bottom of the `setup` job.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+jobs:
+  setup:
+    name: Install dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          # Two separate npm projects in this repo (frontend at the root,
+          # backend in /server) — each has its own lockfile to cache against.
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci --prefix server
+
+      # --- TODO (next phase) -------------------------------------------
+      # - name: Run backend tests (Jest + Supertest)
+      #   run: npm test --prefix server
+      #
+      # - name: Run frontend unit tests (Jest + React Testing Library)
+      #   run: npm run test:unit
+      #
+      # - name: Run E2E tests (Playwright)
+      #   env:
+      #     MONGODB_URI: ${{ secrets.MONGODB_URI }}   # a TEST Atlas cluster/db, not the real one
+      #     JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      #     BACKEND_URL: http://localhost:4000
+      #   run: |
+      #     npx playwright install --with-deps chromium
+      #     npm run test:e2e
+      # -------------------------------------------------------------------

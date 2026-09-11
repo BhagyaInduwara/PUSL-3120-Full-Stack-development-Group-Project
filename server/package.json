@@ -8,23 +8,26 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "jest",
     "seed": "tsx src/scripts/seedAdmin.ts",
     "seed:data": "tsx src/scripts/seedMasterData.ts",
     "migrate:order-lineitems": "tsx src/scripts/migrateOrderLineItems.ts",
     "backfill:record-numbers": "tsx src/scripts/backfillRecordNumbers.ts",
-    "migrate:number-prefixes": "tsx src/scripts/addRecordNumberPrefixes.ts",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest --config tests/jest.config.ts"
+    "migrate:number-prefixes": "tsx src/scripts/addRecordNumberPrefixes.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cookie": "^0.7.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.0"
+    "mongoose": "^8.9.0",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@types/cookie": "^0.6.0",
     "@types/cookie-parser": "^1.4.7",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
@@ -34,6 +37,7 @@
     "@types/supertest": "^7.2.1",
     "jest": "^30.5.1",
     "mongodb-memory-server": "^11.2.0",
+    "socket.io-client": "^4.8.3",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.12",
     "tsx": "^4.19.2",

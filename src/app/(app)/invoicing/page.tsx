@@ -11,6 +11,7 @@ import { Order, type OrderStatus, type OrderLineItem } from "@/domain/Order";
 
 import { API_URL } from "@/lib/apiUrl";
 import { fetchWithCache } from "@/lib/offline";
+import { useLiveEvent } from "@/hooks/useLiveEvent";
 
 function fmtDate(value: string): string {
   if (!value) return value;
@@ -91,6 +92,23 @@ export default function InvoicingPage() {
       setOrderById(orderById);
     })();
   }, []);
+
+  async function refreshInvoices() {
+    const { invoices, orderById } = await fetchInvoices();
+    setInvoices(invoices);
+    setOrderById(orderById);
+  }
+
+  /**
+   * Keeps the table in sync when another client creates, updates, or marks
+   * an invoice paid — invoice.controller.ts emits "invoice:changed" over
+   * the shared Socket.io connection whenever any of those happen
+   * server-side. Same "just refetch" approach as sales/page.tsx's
+   * "order:changed" listener.
+   */
+  useLiveEvent("invoice:changed", () => {
+    refreshInvoices();
+  });
 
   async function handleSave(patch: Partial<InvoiceEditableFields>) {
     if (!selectedInvoice) return;

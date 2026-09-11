@@ -18,6 +18,7 @@ import { PendingMoveBanner } from "@/components/ui/PendingMoveBanner";
 
 import { API_URL } from "@/lib/apiUrl";
 import { fetchWithCache } from "@/lib/offline";
+import { useLiveEvent } from "@/hooks/useLiveEvent";
 type View = "board" | "table";
 
 interface ApiOrder {
@@ -162,6 +163,21 @@ export default function SalesPage() {
       setCachedAt(anyOffline ? ordersResult.cachedAt ?? jobsResult.cachedAt ?? draftResult.cachedAt ?? null : null);
     })();
   }, []);
+
+  /**
+   * Keeps the board in sync when another client creates, moves, or confirms
+   * (draft-approves) an order — order.controller.ts / orderDraft.controller.ts
+   * emit "order:changed" over the shared Socket.io connection whenever any
+   * of those three things happen server-side. Reuses the same refreshOrders()
+   * a local write already triggers, so there's one "make the board match the
+   * server" code path either way — the client that made the change just
+   * refetches twice (once from its own write, once from its own broadcast
+   * coming back), a harmless extra GET rather than something worth threading
+   * a socket id through the REST layer to suppress.
+   */
+  useLiveEvent("order:changed", () => {
+    refreshOrders();
+  });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
