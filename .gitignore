@@ -44,6 +44,8 @@ server/env
 # personal planning docs 
 *_prd.md
 prd.md
+prd_server_tests_production_inventory_masterdata.md
+
 
 # typescript
 *.tsbuildinfo
