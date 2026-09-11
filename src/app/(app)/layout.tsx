@@ -27,9 +27,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <SocketProvider>
-      <div className="flex h-screen bg-[var(--color-bg)] text-[var(--color-text)] font-[family-name:var(--font-body)] overflow-hidden">
+      <div className="flex h-screen bg-[#f1f5f9] text-[var(--color-text)] font-[family-name:var(--font-body)] overflow-hidden">
         <Sidebar user={user.toPublic()} />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0 bg-[#f1f5f9]">
           <OfflineBanner />
           {children}
         </div>

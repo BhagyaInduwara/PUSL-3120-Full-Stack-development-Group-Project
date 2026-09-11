@@ -30,12 +30,12 @@ export function Card({ elevation = "sm", padded = true, className = "", children
 }
 
 export function CardKicker({ children }: { children: ReactNode }) {
-  return <span className="text-[10px] tracking-[0.1em] uppercase text-[var(--color-accent)]">{children}</span>;
+  return <span className="text-[11px] font-semibold tracking-wider uppercase text-emerald-600">{children}</span>;
 }
 
 export function CardTitle({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`font-[family-name:var(--font-heading)] font-medium text-[17px] leading-tight ${className}`}>
+    <div className={`font-[family-name:var(--font-heading)] font-semibold text-[16px] text-slate-900 leading-tight ${className}`}>
       {children}
     </div>
   );

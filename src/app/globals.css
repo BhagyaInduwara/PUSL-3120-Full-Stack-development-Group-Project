@@ -27,117 +27,106 @@
  * sidebar's user menu.
  */
 :root {
-  --color-bg: #161826;
-  --color-surface: #232532;
-  --color-text: #e9e9ed;
-  --color-accent: #9184d9;
-  --color-accent-2: #a7a1db;
-  --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+  --color-bg: #f1f5f9;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f8fafc;
+  --color-text: #0f172a;
+  --color-accent: #059669;
+  --color-accent-2: #10b981;
+  --color-divider: #e2e8f0;
 
-  --shadow-sm: 0 0 0 1px #3f424d;
-  --shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgba(0, 0, 0, 0.55);
-  --shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgba(0, 0, 0, 0.65);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
 
-  --color-neutral-100: #f3f5fe;
-  --color-neutral-200: #e4e7f5;
-  --color-neutral-300: #cfd3e5;
-  --color-neutral-400: #b2b6ca;
-  --color-neutral-500: #9397ab;
-  --color-neutral-600: #75798c;
-  --color-neutral-700: #595d6c;
-  --color-neutral-800: #3f424d;
-  --color-neutral-900: #292b31;
+  --color-neutral-100: #0f172a;
+  --color-neutral-200: #1e293b;
+  --color-neutral-300: #334155;
+  --color-neutral-400: #64748b;
+  --color-neutral-500: #94a3b8;
+  --color-neutral-600: #cbd5e1;
+  --color-neutral-700: #e2e8f0;
+  --color-neutral-800: #f1f5f9;
+  --color-neutral-900: #f8fafc;
 
-  --color-accent-100: #f5f4ff;
-  --color-accent-200: #e7e5fe;
-  --color-accent-300: #d2cefd;
-  --color-accent-400: #b5abfc;
-  --color-accent-500: #968ae0;
-  --color-accent-600: #796cbf;
-  --color-accent-700: #5d5294;
-  --color-accent-800: #423a6a;
-  --color-accent-900: #2b2741;
+  --color-accent-100: #022c22;
+  --color-accent-200: #064e3b;
+  --color-accent-300: #065f46;
+  --color-accent-400: #047857;
+  --color-accent-500: #059669;
+  --color-accent-600: #10b981;
+  --color-accent-700: #34d399;
+  --color-accent-800: #d1fae5;
+  --color-accent-900: #ecfdf5;
 
-  --color-accent-2-100: #f5f4ff;
-  --color-accent-2-200: #e7e5fe;
-  --color-accent-2-300: #d2cefd;
-  --color-accent-2-400: #b5afe8;
-  --color-accent-2-500: #9690c9;
-  --color-accent-2-600: #7972a9;
-  --color-accent-2-700: #5c5783;
-  --color-accent-2-800: #423e5d;
-  --color-accent-2-900: #2b293a;
+  --color-accent-2-100: #022c22;
+  --color-accent-2-200: #064e3b;
+  --color-accent-2-300: #047857;
+  --color-accent-2-400: #059669;
+  --color-accent-2-500: #10b981;
+  --color-accent-2-600: #34d399;
+  --color-accent-2-700: #6ee7b7;
+  --color-accent-2-800: #d1fae5;
+  --color-accent-2-900: #ecfdf5;
 
   --font-heading: var(--font-inter), system-ui, sans-serif;
-  --font-heading-weight: 500;
+  --font-heading-weight: 600;
   --font-body: var(--font-inter), system-ui, sans-serif;
 
-  --space-1: 2.8px;
-  --space-2: 5.6px;
-  --space-3: 8.4px;
-  --space-4: 11.2px;
-  --space-6: 16.8px;
-  --space-8: 22.4px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
 
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 14px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
 }
 
-/*
- * Light theme — same accent hue family as dark, just deepened a step
- * (#7566d1/#8b7ecf instead of #9184d9/#a7a1db) since the lighter dark-mode
- * tones don't carry enough contrast against a white surface. Same
- * lavender-leaning neutral bias, inverted from light-text-on-near-black to
- * dark-text-on-near-white. Border-ring shadows are lightened to match —
- * the dark-mode rings read as a heavy border on a white card otherwise.
- */
-[data-theme="light"] {
-  --color-bg: #f6f5fb;
-  --color-surface: #ffffff;
-  --color-text: #1e1f2e;
-  --color-accent: #7566d1;
-  --color-accent-2: #8b7ecf;
-  --color-divider: color-mix(in srgb, #1e1f2e 12%, transparent);
+[data-theme="dark"] {
+  --color-bg: #09090b;
+  --color-surface: #121215;
+  --color-surface-hover: #18181b;
+  --color-text: #f4f4f5;
+  --color-accent: #10b981;
+  --color-accent-2: #34d399;
+  --color-divider: #27272a;
 
-  --shadow-sm: 0 0 0 1px #e3e1ee;
-  --shadow-md: 0 0 0 1px #d8d5e9, 0 6px 18px rgba(30, 31, 46, 0.12);
-  --shadow-lg: 0 0 0 1px #c3bfdd, 0 16px 40px rgba(30, 31, 46, 0.18);
+  --shadow-sm: 0 0 0 1px #27272a;
+  --shadow-md: 0 0 0 1px #27272a, 0 8px 24px -4px rgba(0, 0, 0, 0.65);
+  --shadow-lg: 0 0 0 1px #3f3f46, 0 16px 40px -8px rgba(0, 0, 0, 0.85);
 
-  /* Mirrored end-to-end from the dark values above — see the comment block at the top of this file. */
-  --color-neutral-100: #292b31;
-  --color-neutral-200: #3f424d;
-  --color-neutral-300: #595d6c;
-  --color-neutral-400: #75798c;
-  /* Deliberately darker than a pure mirror (dark's neutral-500 is its own
-     mirror at the ramp's midpoint, #9397ab) — that value is under ~3:1
-     contrast against white, too low for the secondary body text it's
-     used as (dates, subtitles, muted labels). */
-  --color-neutral-500: #686c82;
-  --color-neutral-600: #b2b6ca;
-  --color-neutral-700: #cfd3e5;
-  --color-neutral-800: #e4e7f5;
-  --color-neutral-900: #f3f5fe;
+  --color-neutral-100: #fafafa;
+  --color-neutral-200: #f4f4f5;
+  --color-neutral-300: #d4d4d8;
+  --color-neutral-400: #a1a1aa;
+  --color-neutral-500: #71717a;
+  --color-neutral-600: #52525b;
+  --color-neutral-700: #3f3f46;
+  --color-neutral-800: #27272a;
+  --color-neutral-900: #18181b;
 
-  --color-accent-100: #2b2741;
-  --color-accent-200: #423a6a;
-  --color-accent-300: #5d5294;
-  --color-accent-400: #796cbf;
-  --color-accent-500: #968ae0;
-  --color-accent-600: #b5abfc;
-  --color-accent-700: #d2cefd;
-  --color-accent-800: #e7e5fe;
-  --color-accent-900: #f5f4ff;
+  --color-accent-100: #ecfdf5;
+  --color-accent-200: #d1fae5;
+  --color-accent-300: #a7f3d0;
+  --color-accent-400: #6ee7b7;
+  --color-accent-500: #34d399;
+  --color-accent-600: #10b981;
+  --color-accent-700: #059669;
+  --color-accent-800: #064e3b;
+  --color-accent-900: #022c22;
 
-  --color-accent-2-100: #2b293a;
-  --color-accent-2-200: #423e5d;
-  --color-accent-2-300: #5c5783;
-  --color-accent-2-400: #7972a9;
-  --color-accent-2-500: #9690c9;
-  --color-accent-2-600: #b5afe8;
-  --color-accent-2-700: #d2cefd;
-  --color-accent-2-800: #e7e5fe;
-  --color-accent-2-900: #f5f4ff;
+  --color-accent-2-100: #ecfdf5;
+  --color-accent-2-200: #d1fae5;
+  --color-accent-2-300: #a7f3d0;
+  --color-accent-2-400: #6ee7b7;
+  --color-accent-2-500: #34d399;
+  --color-accent-2-600: #10b981;
+  --color-accent-2-700: #059669;
+  --color-accent-2-800: #064e3b;
+  --color-accent-2-900: #022c22;
 }
 
 body {
@@ -193,4 +182,38 @@ a:hover {
 }
 ::selection {
   background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+.bg-radial-dots {
+  background-image: radial-gradient(circle at 1px 1px, var(--color-divider) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.bg-radial-dots-vignette {
+  background-image: radial-gradient(circle at 1px 1px, var(--color-divider) 1px, transparent 0);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse 85% 85% at 50% 40%, #000 60%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 40%, #000 60%, transparent 100%);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 15px -3px rgba(16, 185, 129, 0.25);
+}
+
+.bg-dot-pattern {
+  background-image: radial-gradient(circle at 1px 1px, #e2e8f0 1px, transparent 0);
+  background-size: 20px 20px;
+}
+
+@keyframes shine {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+.animate-shine {
+  animation: shine 5s linear infinite;
 }
