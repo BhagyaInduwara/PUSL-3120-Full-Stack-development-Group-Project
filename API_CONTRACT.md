@@ -52,6 +52,29 @@ All error responses strictly follow a uniform error payload structure:
 }
 ```
 
+### Concurrency Control (Optimistic Locking)
+
+`PUT /api/orders/:id`, `PUT /api/invoices/:id`, and `PUT /api/shipments/:id`
+each accept an optional `expectedUpdatedAt` field in the request body — the
+`updatedAt` timestamp the client last read for that record (every edit
+dialog sends the value it opened the record with). When present, the
+server folds it into the update's own filter as one atomic
+`findOneAndUpdate` (not a separate read-then-write), so the write only
+applies if nobody else has saved a change to that record since:
+
+- **Match** → the update applies normally, response `200` as usual.
+- **No match, but the id still exists** → `409 Conflict`:
+  ```json
+  { "error": "This order was changed by someone else. Reload and try again." }
+  ```
+  (Invoice/Shipment return the equivalent message for their own entity.)
+- **No match, id doesn't exist at all** → `404 Not Found`, same as usual.
+- **`expectedUpdatedAt` omitted entirely** → no concurrency check runs;
+  the update applies unconditionally (last-write-wins), same as before
+  this field existed.
+- **`expectedUpdatedAt` present but not a valid date** → `400 Bad Request`:
+  `{ "error": "expectedUpdatedAt must be a valid date." }`
+
 ---
 
 ## 3. Data Models & Schemas
@@ -582,7 +605,12 @@ Lists every order, newest first. **Access**: Authenticated. **Response `200`**: 
 **`400`**: `lineItems` missing/empty or any item invalid (`product` not a string, `qty < 1`, or `price < 0`).
 
 #### `PUT /api/orders/:id`
-Full-record update (Mongoose schema validation applies). **Response `200`**: `OrderRecord`. **`404`**: not found.
+Full-record update (Mongoose schema validation applies); `number` is
+stripped from the body even if sent (assigned once at creation, never
+client-editable). Supports optimistic concurrency via `expectedUpdatedAt`
+— see [Concurrency Control](#concurrency-control-optimistic-locking).
+**Response `200`**: `OrderRecord`. **`404`**: not found. **`409`**: stale
+`expectedUpdatedAt` (someone else changed it first).
 
 #### `DELETE /api/orders/:id`
 **Response `200`**: `{ "ok": true }` (not `204` — differs from Customer/Product/Supplier). **`404`**: not found.
@@ -640,7 +668,10 @@ interface Invoice {
 - `GET /api/invoices` — list, **populates** `orderId` → `order`. Response: `{ invoices: Invoice[] }`.
 - `GET /api/invoices/:id` — Response: `{ invoice: Invoice }`. `404` if missing.
 - `POST /api/invoices` — Body: `{ orderId, status?, issueDate?, dueDate? }`. `400` on missing/invalid `orderId` or bad `status`.
-- `PUT /api/invoices/:id` — partial update (`$set`). Same validation as create.
+- `PUT /api/invoices/:id` — partial update (`$set`). Same validation as
+  create. Supports optimistic concurrency via `expectedUpdatedAt` — see
+  [Concurrency Control](#concurrency-control-optimistic-locking). `409` on
+  a stale `expectedUpdatedAt`.
 - `PATCH /api/invoices/:id/mark-paid` — no body; sets `status: "Paid"`.
 
 No `DELETE` route — invoices move through their status lifecycle instead of being removed.
@@ -667,7 +698,14 @@ interface Shipment {
 - `GET /api/shipments` — list, populates `orderId` → `order`. Response: `{ shipments: Shipment[] }`.
 - `GET /api/shipments/:id` — Response: `{ shipment: Shipment }`. `404` if missing.
 - `POST /api/shipments` — Body: `{ orderId, invoiceId?, status?, date? }`. `400` on invalid `orderId`/`invoiceId`/`status`.
-- `PUT /api/shipments/:id` — partial update (`$set`).
+- `PUT /api/shipments/:id` — partial update (`$set`). Supports optimistic
+  concurrency via `expectedUpdatedAt` — see
+  [Concurrency Control](#concurrency-control-optimistic-locking).
+  **`409 Conflict`** on either a stale `expectedUpdatedAt`, or an edit
+  attempt on a shipment whose `status` is already `"Delivered"`
+  (`{ "error": "This shipment has already been delivered and can no
+  longer be modified." }` — delivered shipments are a finalized record;
+  see `docs/bug-report.md`).
 - `PATCH /api/shipments/:id/dispatch` — no body; sets `status: "Dispatched"`.
 - `PATCH /api/shipments/:id/deliver` — no body; sets `status: "Delivered"`.
 
@@ -721,6 +759,62 @@ interface ProductionJob {
 - `GET /api/production-jobs/:id` — Response: `{ productionJob: ProductionJob }`. `404` if missing.
 - `POST /api/production-jobs` — Body: `{ product, qty, due, status?, progress? }`. Response `201`: `{ productionJob }`.
 - `PUT /api/production-jobs/:id` — full-field update. Response: `{ productionJob }`.
+  **`409 Conflict`** if the job's `status` is already `"Completed"`
+  (`{ "error": "This production job has already been completed and can
+  no longer be modified." }` — a completed job's scope is finalized, same
+  guard pattern as Shipment's `"Delivered"` above).
 - `PATCH /api/production-jobs/:id/status` — Body: `{ status?, progress? }` (partial `$set`). Response: `{ productionJob }`.
 
 No `DELETE` route. All routes require authentication.
+
+---
+
+### 4.12 Dashboard Service (`/api/activity`, `/api/revenue-series`)
+
+Two independent resources backing the Dashboard screen's activity feed and
+revenue chart. Neither follows the `toPublicX()` id-remapping convention
+used elsewhere — both return the raw Mongoose document (`_id`, not `id`).
+
+```typescript
+interface ActivityFeedEntry {
+  _id: string;
+  message: string;
+  occurredAt: string;   // ISO 8601, defaults to now if omitted on create
+}
+
+interface RevenueSeriesPoint {
+  _id: string;
+  week: string;         // unique key this endpoint upserts on
+  revenue: number;
+  orders: number;
+  sortOrder: number;    // display ordering, ascending
+}
+```
+
+#### `GET /api/activity`
+Lists every activity feed entry, newest first (`occurredAt` descending).
+
+- **Access Level**: Authenticated
+- **Response `200 OK`**: `{ "activities": ActivityFeedEntry[] }`
+
+#### `POST /api/activity`
+Creates a new activity feed entry.
+
+- **Access Level**: Authenticated
+- **Request Body**: `{ "message": "string (required)", "occurredAt": "ISO 8601 (optional, defaults to now)" }`
+- **Response `201 Created`**: `{ "activity": ActivityFeedEntry }`
+
+#### `GET /api/revenue-series`
+Lists every revenue series point, ordered by `sortOrder` ascending.
+
+- **Access Level**: Authenticated
+- **Response `200 OK`**: `{ "revenueSeries": RevenueSeriesPoint[] }`
+
+#### `POST /api/revenue-series`
+Upserts a revenue series point by `week` — creates it if that `week`
+doesn't exist yet, otherwise overwrites it in place. Not a partial
+update: all four fields are expected on every call.
+
+- **Access Level**: Authenticated
+- **Request Body**: `{ "week": "string (required)", "revenue": "number (required)", "orders": "number (required)", "sortOrder": "number (required)" }`
+- **Response `201 Created`**: `{ "revenuePoint": RevenueSeriesPoint }` (returned even when the call updated an existing `week` rather than creating a new one — the upsert always responds `201`).

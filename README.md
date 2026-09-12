@@ -5,6 +5,16 @@ board, plus Invoicing, Inventory, Shipments, and Production tracking, all
 kept in sync live across every open client via Socket.io. Built for the
 PUSL 3120 Full-Stack Development group project.
 
+## Live deployment
+
+Both deployed to Vercel — frontend as a standard Next.js app, backend via
+its own serverless entry point (`server/api/index.ts` + `server/vercel.json`,
+see CLAUDE.md "Backend (Express + Mongoose)").
+
+- **Frontend:** https://pusl-3120-full-stack-development-gr.vercel.app/
+  (login: `admin` / `admin@123`, or register your own account)
+- **Backend API:** https://pusl-3120-full-stack-development-gr-psi.vercel.app/api
+
 ## Tech stack
 
 | Layer | Technology |

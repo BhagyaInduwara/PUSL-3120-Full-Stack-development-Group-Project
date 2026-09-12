@@ -225,7 +225,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"customer\": \"BluePeak Logistics\",\n  \"lineItems\": [\n    { \"product\": \"Precision Hydraulic Pump\", \"qty\": 8, \"price\": 1450.00 }\n  ],\n  \"status\": \"Confirmed\",\n  \"date\": \"2026-08-27T00:00:00.000Z\"\n}"
+              "raw": "{\n  \"customer\": \"BluePeak Logistics\",\n  \"lineItems\": [\n    { \"product\": \"Precision Hydraulic Pump\", \"qty\": 8, \"price\": 1450.00 }\n  ],\n  \"status\": \"Confirmed\",\n  \"date\": \"2026-08-27T00:00:00.000Z\",\n  \"expectedUpdatedAt\": \"2026-08-27T00:00:00.000Z\"\n}"
             },
             "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] }
           }
@@ -321,7 +321,7 @@
           "request": {
             "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Sent\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Sent\",\n  \"expectedUpdatedAt\": \"2026-08-27T00:00:00.000Z\"\n}" },
             "url": { "raw": "{{baseUrl}}/invoices/{{invoiceId}}", "host": ["{{baseUrl}}"], "path": ["invoices", "{{invoiceId}}"] }
           }
         },
@@ -360,7 +360,7 @@
           "request": {
             "method": "PUT",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Packed\"\n}" },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"Packed\",\n  \"expectedUpdatedAt\": \"2026-08-27T00:00:00.000Z\"\n}" },
             "url": { "raw": "{{baseUrl}}/shipments/{{shipmentId}}", "host": ["{{baseUrl}}"], "path": ["shipments", "{{shipmentId}}"] }
           }
         },
@@ -451,6 +451,43 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{\n  \"status\": \"Completed\",\n  \"progress\": 100\n}" },
             "url": { "raw": "{{baseUrl}}/production-jobs/{{productionJobId}}/status", "host": ["{{baseUrl}}"], "path": ["production-jobs", "{{productionJobId}}", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "List activity feed",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/activity", "host": ["{{baseUrl}}"], "path": ["activity"] }
+          }
+        },
+        {
+          "name": "Create activity entry",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"message\": \"Order ORD-2026/09/12/A001 confirmed\"\n}" },
+            "url": { "raw": "{{baseUrl}}/activity", "host": ["{{baseUrl}}"], "path": ["activity"] }
+          }
+        },
+        {
+          "name": "List revenue series",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/revenue-series", "host": ["{{baseUrl}}"], "path": ["revenue-series"] }
+          }
+        },
+        {
+          "name": "Upsert revenue series point",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"week\": \"2026-W36\",\n  \"revenue\": 48200,\n  \"orders\": 12,\n  \"sortOrder\": 36\n}" },
+            "url": { "raw": "{{baseUrl}}/revenue-series", "host": ["{{baseUrl}}"], "path": ["revenue-series"] }
           }
         }
       ]
