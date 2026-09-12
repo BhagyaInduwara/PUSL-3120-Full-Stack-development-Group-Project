@@ -1,10 +1,14 @@
 name: CI
 
-# Environment setup only for now (checkout, Node.js, install both
-# package.json's dependencies) — the actual test-running steps
-# (server Jest+Supertest, frontend Jest+RTL, Playwright E2E) get added on
-# top of this once the E2E job's Atlas secrets are set up. See the TODO
-# block at the bottom of the `setup` job.
+# Runs the backend (Jest + Supertest) and frontend (Jest + React Testing
+# Library) suites on every push/PR — neither needs any repository secrets:
+# the backend suite starts its own ephemeral in-memory MongoDB and sets its
+# own dummy JWT_SECRET (see server/src/__tests__/setupEnv.ts), and the
+# frontend suite is pure component tests with no network calls. The
+# Playwright E2E suite is a deliberate follow-up — it drives the real
+# running app against a real MongoDB connection, so it needs a TEST Atlas
+# cluster's MONGODB_URI/JWT_SECRET configured as GitHub Actions secrets
+# first. See the TODO block at the bottom of the `test` job.
 on:
   push:
     branches: ["**"]
@@ -13,8 +17,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  setup:
-    name: Install dependencies
+  test:
+    name: Install & run tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -37,13 +41,13 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --prefix server
 
+      - name: Run backend tests (Jest + Supertest)
+        run: npm test --prefix server
+
+      - name: Run frontend unit tests (Jest + React Testing Library)
+        run: npm run test:unit
+
       # --- TODO (next phase) -------------------------------------------
-      # - name: Run backend tests (Jest + Supertest)
-      #   run: npm test --prefix server
-      #
-      # - name: Run frontend unit tests (Jest + React Testing Library)
-      #   run: npm run test:unit
-      #
       # - name: Run E2E tests (Playwright)
       #   env:
       #     MONGODB_URI: ${{ secrets.MONGODB_URI }}   # a TEST Atlas cluster/db, not the real one
