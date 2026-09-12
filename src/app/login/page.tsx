@@ -60,14 +60,16 @@ export default function LoginPage() {
   const isLogin = mode === "login";
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--color-bg)]">
-      <div className="w-full max-w-[380px] flex flex-col gap-6">
-        <div className="flex items-center gap-2.5 justify-center">
-          <div className="w-8 h-8 flex-none rounded-lg bg-[var(--color-accent-800)] text-[var(--color-accent-200)] flex items-center justify-center font-[family-name:var(--font-heading)] font-semibold text-base">
-            F
+    <div className="min-h-screen flex items-center justify-center p-6 bg-auth-glow relative overflow-hidden">
+      <div className="w-full max-w-[380px] flex flex-col gap-6 relative z-10">
+        <div className="flex flex-col items-center justify-center">
+          <div className="font-[family-name:var(--font-heading)] text-[26px] font-extrabold tracking-tight leading-none text-[var(--color-text)] flex items-center gap-0.5">
+            <span>Flow</span>
+            <span className="text-[var(--color-accent)]">ERP</span>
+            <span className="w-2 h-2 rounded-full bg-[var(--color-accent)] inline-block ml-1 animate-pulse" />
           </div>
-          <span className="font-[family-name:var(--font-heading)] font-medium text-xl tracking-tight text-[var(--color-text)]">
-            FlowERP
+          <span className="text-[11px] font-semibold text-[var(--color-neutral-400)] tracking-wider uppercase mt-1.5">
+            Enterprise Suite
           </span>
         </div>
 

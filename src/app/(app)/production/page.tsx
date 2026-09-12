@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { BoardSkeleton } from "@/components/ui";
 import { JobColumn } from "@/components/production/JobColumn";
 import { JobDetailDialog } from "@/components/production/JobDetailDialog";
 import { NewJobModal } from "@/components/production/NewJobModal";
@@ -84,6 +85,7 @@ async function fetchJobs(): Promise<ProductionJob[]> {
 
 export default function ProductionPage() {
   const [jobs, setJobs] = useState<ProductionJob[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<ProductionJob | null>(null);
   const [isNewJobOpen, setIsNewJobOpen] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ jobId: string; fromStatus: JobStatus; toStatus: JobStatus } | null>(
@@ -96,6 +98,8 @@ export default function ProductionPage() {
         setJobs(await fetchJobs());
       } catch (error) {
         console.error("Error fetching production jobs:", error);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -208,36 +212,40 @@ export default function ProductionPage() {
         }
       />
       <div className="flex-1 overflow-auto px-8 pt-6 pb-10">
-        <div className="grid grid-cols-3 gap-4">
-          <JobColumn
-            label="Planned"
-            status="Planned"
-            jobs={jobs}
-            variant="neutral"
-            pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
-            onSelect={setSelectedJob}
-            onMove={handleMove}
-          />
-          <JobColumn
-            label="In Progress"
-            status="In Progress"
-            jobs={jobs}
-            variant="accent"
-            pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
-            onSelect={setSelectedJob}
-            onMove={handleMove}
-          />
-          <JobColumn
-            label="Completed"
-            status="Completed"
-            jobs={jobs}
-            variant="neutral"
-            dim
-            pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
-            onSelect={setSelectedJob}
-            onMove={handleMove}
-          />
-        </div>
+        {loading ? (
+          <BoardSkeleton columns={3} />
+        ) : (
+          <div className="grid grid-cols-3 gap-4">
+            <JobColumn
+              label="Planned"
+              status="Planned"
+              jobs={jobs}
+              variant="neutral"
+              pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
+              onSelect={setSelectedJob}
+              onMove={handleMove}
+            />
+            <JobColumn
+              label="In Progress"
+              status="In Progress"
+              jobs={jobs}
+              variant="accent"
+              pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
+              onSelect={setSelectedJob}
+              onMove={handleMove}
+            />
+            <JobColumn
+              label="Completed"
+              status="Completed"
+              jobs={jobs}
+              variant="neutral"
+              dim
+              pendingMove={pendingMove ? { jobId: pendingMove.jobId, status: pendingMove.toStatus } : null}
+              onSelect={setSelectedJob}
+              onMove={handleMove}
+            />
+          </div>
+        )}
       </div>
 
       {selectedJob && (

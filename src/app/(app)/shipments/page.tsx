@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { TableSkeleton } from "@/components/ui";
 import { ShipmentTable } from "@/components/shipments/ShipmentTable";
 import { ShipmentDetailDialog } from "@/components/shipments/ShipmentDetailDialog";
 import { NewShipmentDialog, type NewShipmentData } from "@/components/shipments/NewShipmentDialog";
@@ -103,6 +104,7 @@ export default function ShipmentsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -114,6 +116,8 @@ export default function ShipmentsPage() {
         setCachedAt(result.offline ? result.cachedAt ?? null : null);
       } catch (error) {
         console.error("Error fetching shipments:", error);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -262,7 +266,11 @@ export default function ShipmentsPage() {
           </div>
         )}
 
-        <ShipmentTable shipments={shipments} orderById={orderById} onSelect={setSelectedShipment} />
+        {loading ? (
+          <TableSkeleton rows={7} cols={6} />
+        ) : (
+          <ShipmentTable shipments={shipments} orderById={orderById} onSelect={setSelectedShipment} />
+        )}
       </div>
 
       {selectedShipment && (

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { BoardSkeleton, TableSkeleton } from "@/components/ui";
 import { PlusIcon } from "@/components/icons";
 import { Order, type OrderStatus, type OrderLineItem, type OrderEditableFields } from "@/domain/Order";
 import { IncomingOrderDraft, type DraftLineItem } from "@/domain/IncomingOrderDraft";
@@ -137,6 +138,7 @@ export default function SalesPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [jobs, setJobs] = useState<ProductionJob[]>([]);
   const [draft, setDraft] = useState<IncomingOrderDraft | null>(null);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("board");
   const [showStages, setShowStages] = useState(true);
   const [search, setSearch] = useState("");
@@ -155,14 +157,18 @@ export default function SalesPage() {
 
   useEffect(() => {
     (async () => {
-      const [ordersResult, jobsResult, draftResult] = await Promise.all([fetchOrders(), fetchJobs(), fetchFirstDraft()]);
-      setOrders(ordersResult.data);
-      setJobs(jobsResult.data);
-      setDraft(draftResult.data);
+      try {
+        const [ordersResult, jobsResult, draftResult] = await Promise.all([fetchOrders(), fetchJobs(), fetchFirstDraft()]);
+        setOrders(ordersResult.data);
+        setJobs(jobsResult.data);
+        setDraft(draftResult.data);
 
-      const anyOffline = ordersResult.offline || jobsResult.offline || draftResult.offline;
-      setOffline(anyOffline);
-      setCachedAt(anyOffline ? ordersResult.cachedAt ?? jobsResult.cachedAt ?? draftResult.cachedAt ?? null : null);
+        const anyOffline = ordersResult.offline || jobsResult.offline || draftResult.offline;
+        setOffline(anyOffline);
+        setCachedAt(anyOffline ? ordersResult.cachedAt ?? jobsResult.cachedAt ?? draftResult.cachedAt ?? null : null);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -417,7 +423,9 @@ export default function SalesPage() {
               </button>
             </div>
           )}
-          {view === "table" ? (
+          {loading ? (
+            view === "table" ? <TableSkeleton rows={8} cols={6} /> : <BoardSkeleton columns={5} />
+          ) : view === "table" ? (
             <OrderTable orders={filtered} onSelect={setSelectedOrder} />
           ) : (
             <OrderBoard

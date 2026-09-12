@@ -61,7 +61,7 @@ export function JobColumn({ label, status, jobs, variant, dim, pendingMove, onSe
               draggable
               onDragStart={(e) => e.dataTransfer.setData("text/plain", job.id)}
               elevation="sm"
-              className={`gap-0 cursor-grab active:cursor-grabbing select-none transition-shadow ${dim ? "opacity-70" : ""} ${
+              className={`gap-0 cursor-grab active:cursor-grabbing select-none transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md ${dim ? "opacity-70" : ""} ${
                 pending ? "border border-dashed border-[var(--color-accent)]" : ""
               }`}
               onClick={() => onSelect(job)}

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardTitle } from "@/components/ui/Card";
+import { CardTitle } from "@/components/ui/Card";
 import { Tag } from "@/components/ui/Tag";
+import { Skeleton } from "@/components/ui";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { SalesByCategoryCard, type CategorySalesItem } from "@/components/dashboard/SalesByCategoryCard";
@@ -21,10 +22,10 @@ import { API_URL } from "@/lib/apiUrl";
 import { fetchWithCache } from "@/lib/offline";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Seating: "#818cf8",
-  Storage: "#38bdf8",
-  Desks: "#34d399",
-  Tables: "#f472b6",
+  Seating: "#059669",
+  Storage: "#0284c7",
+  Desks: "#d97706",
+  Tables: "#7c3aed",
 };
 
 interface ApiOrder {
@@ -165,6 +166,7 @@ const today = new Date().toLocaleDateString("en-US", { weekday: "short", month: 
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -172,6 +174,8 @@ export default function DashboardPage() {
         setData(await fetchDashboardData());
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -226,15 +230,58 @@ export default function DashboardPage() {
     .sort((a, b) => b.units - a.units)
     .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
+  const [activeTab, setActiveTab] = useState<"overview" | "operations">("overview");
+
   return (
-    <>
+    <div className="flex-1 flex flex-col min-h-0 bg-[var(--color-bg)]">
       <PageHeader
         title="Dashboard"
-        subtitle="Welcome back — here's what's moving today."
+        subtitle="Executive operational overview and live performance metrics."
         actions={<Tag variant="neutral">{today}</Tag>}
       />
-      <div className="flex-1 overflow-auto px-8 pt-6 pb-10">
-        <div className="grid grid-cols-4 gap-4 mb-6">
+
+      <div className="px-8 bg-[var(--color-surface)] border-b border-[var(--color-divider)] flex items-center justify-between">
+        <nav className="flex gap-8 -mb-px">
+          <button
+            type="button"
+            onClick={() => setActiveTab("overview")}
+            className={`py-3.5 text-sm font-medium border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "overview"
+                ? "border-[var(--color-accent)] text-[var(--color-accent)] font-semibold"
+                : "border-transparent text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:border-[var(--color-divider)]"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full inline-block transition-colors ${
+                activeTab === "overview" ? "bg-[var(--color-accent)] shadow-xs" : "bg-[var(--color-neutral-600)]"
+              }`}
+            />
+            Overview &amp; Cashflow
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("operations")}
+            className={`py-3.5 text-sm font-medium border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+              activeTab === "operations"
+                ? "border-[var(--color-accent)] text-[var(--color-accent)] font-semibold"
+                : "border-transparent text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:border-[var(--color-divider)]"
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full inline-block transition-colors ${
+                activeTab === "operations" ? "bg-[var(--color-accent)] shadow-xs" : "bg-[var(--color-neutral-600)]"
+              }`}
+            />
+            Operations &amp; Products
+          </button>
+        </nav>
+        <div className="text-xs text-[var(--color-neutral-400)] font-medium">
+          Live sync active
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-divider)] shadow-xs divide-y divide-[var(--color-divider)] md:divide-y-0 md:divide-x md:divide-[var(--color-divider)] flex flex-col md:flex-row overflow-hidden">
           <StatCard
             kicker="Pending Orders"
             value={pendingOrdersCount}
@@ -258,45 +305,75 @@ export default function DashboardPage() {
             value={lowStockCount}
             description="Below reorder point"
             Icon={LowStockIcon}
-            valueClassName="text-[var(--color-accent-300)]"
+            valueClassName="text-amber-600"
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6 items-start">
-          <div className="flex flex-col gap-6">
-            <Card elevation="sm" className="gap-3 p-6">
-              <div className="flex items-baseline justify-between">
-                <div>
-                  <CardTitle>Orders &amp; revenue</CardTitle>
-                  <p className="text-xs text-[var(--color-neutral-500)] mt-0.5">Weekly revenue &amp; order volume performance</p>
-                </div>
-                <span className="text-[11px] text-[var(--color-neutral-500)]">Last 8 weeks</span>
+        {loading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+            <div className="lg:col-span-2 p-7 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-divider)] shadow-xs flex flex-col justify-between min-h-[420px]">
+              <div className="flex justify-between items-center mb-4">
+                <Skeleton className="h-5 w-36" />
+                <Skeleton className="h-5 w-24" />
               </div>
-              <RevenueChart series={revenueSeries} />
-              <div className="flex gap-6 text-xs text-[var(--color-neutral-400)] pt-2 border-t border-[var(--color-divider)]">
-                <span className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-sm bg-[var(--color-accent-800)] inline-block" />
+              <Skeleton className="h-[240px] w-full rounded-xl" />
+              <div className="flex gap-6 pt-4 border-t border-[var(--color-divider)]">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            </div>
+            <div className="p-7 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-divider)] shadow-xs flex flex-col gap-4 min-h-[420px]">
+              <Skeleton className="h-5 w-32" />
+              <div className="flex flex-col gap-4 mt-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex justify-between items-center gap-2">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3.5 w-16" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : activeTab === "overview" ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+            <div className="lg:col-span-2 bg-[var(--color-surface)] rounded-2xl p-7 border border-[var(--color-divider)] shadow-xs flex flex-col justify-between min-h-[420px]">
+              <div>
+                <div className="flex items-baseline justify-between mb-5">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[var(--color-text)] m-0">Orders &amp; revenue</h3>
+                    <p className="text-xs text-[var(--color-neutral-400)] mt-0.5">Weekly revenue &amp; order volume performance</p>
+                  </div>
+                  <span className="text-xs font-medium text-[var(--color-neutral-400)] bg-[var(--color-surface-subtle)] px-3 py-1.5 rounded-lg border border-[var(--color-divider)] shadow-xs">
+                    Last 8 weeks
+                  </span>
+                </div>
+                <div className="py-2">
+                  <RevenueChart series={revenueSeries} />
+                </div>
+              </div>
+              <div className="flex gap-8 text-xs text-[var(--color-neutral-400)] pt-5 mt-auto border-t border-[var(--color-divider)] font-medium">
+                <span className="flex items-center gap-2.5">
+                  <span className="w-3.5 h-3.5 rounded bg-[var(--color-accent)] inline-block" />
                   Revenue ($)
                 </span>
-                <span className="flex items-center gap-2">
-                  <span className="w-4 h-0.5 bg-[var(--color-accent)] inline-block" />
+                <span className="flex items-center gap-2.5">
+                  <span className="w-4 h-1.5 bg-[var(--color-accent-2)] rounded inline-block" />
                   Orders Placed
                 </span>
               </div>
-            </Card>
+            </div>
 
+            <div className="bg-[var(--color-surface)] rounded-2xl p-7 border border-[var(--color-divider)] shadow-xs flex flex-col min-h-[420px]">
+              <ActivityFeed items={activities} />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+            <TopProductsCard products={topProducts} limit={5} />
             <SalesByCategoryCard categories={salesByCategory} totalUnits={totalSalesUnits} />
           </div>
-
-          <div className="flex flex-col gap-6">
-            <TopProductsCard products={topProducts} limit={5} />
-
-            <Card elevation="sm" className="gap-0.5 p-6">
-              <ActivityFeed items={activities} />
-            </Card>
-          </div>
-        </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }

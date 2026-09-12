@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { IncomingOrderDraft, DraftLineItem } from "@/domain/IncomingOrderDraft";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -13,15 +14,23 @@ interface NewOrderDrawerProps {
 
 /** NewOrderDrawer — slide-over panel for reviewing an order auto-parsed from an inbound email before it becomes a real Order (see IncomingOrderDraft.toOrder). */
 export function NewOrderDrawer({ draft, onClose, onLineItemChange, onApprove }: NewOrderDrawerProps) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <>
       <div
-        className="absolute inset-0 bg-[color-mix(in_srgb,var(--color-neutral-900)_55%,transparent)]"
+        className="fixed inset-0 z-40 bg-black/40 dark:bg-black/60 backdrop-blur-xs animate-fade-in"
         onClick={onClose}
       />
       <Card
         elevation="lg"
-        className="absolute top-0 right-0 bottom-0 w-[440px] rounded-none overflow-auto p-6 gap-4"
+        className="fixed top-0 right-0 bottom-0 z-50 w-[440px] rounded-none overflow-auto p-6 gap-4 border-l border-[var(--color-divider)] shadow-2xl bg-[var(--color-surface)]"
       >
         <div className="flex justify-between items-start">
           <CardTitle>New Order</CardTitle>
