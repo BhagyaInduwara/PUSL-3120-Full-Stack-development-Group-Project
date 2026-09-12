@@ -10,6 +10,7 @@ describe("OrderCard Component", () => {
     customer: "Nexus Corp",
     status: "Draft",
     date: "2026-03-01",
+    updatedAt: "2026-03-01T00:00:00.000Z",
     lineItems: [
       { product: "Ergonomic Chair", qty: 2, price: 1500 },
       { product: "Standing Desk", qty: 1, price: 5000 },

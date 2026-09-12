@@ -90,10 +90,22 @@ state makes it impossible" (e.g. a duplicate `Product.sku` or duplicate
   (`npm test` inside `server/`, 13/13 across the full suite).
 - `tsc --noEmit` and `npm run build` both clean in `/server`.
 
-## Known related gap (not fixed here, flagged for a follow-up)
+## Related gap, fixed as a follow-up
 
 The same pattern — a domain class documenting an immutability rule that
-only the frontend enforces — also exists for `ProductionJob`: its status
-state machine says a `"Completed"` job is "Fully read-only," but
-`PUT /api/production-jobs/:id` has no equivalent server-side check. Worth
-a follow-up fix and test using the same approach as this one.
+only the frontend enforces — also existed for `ProductionJob`: its
+`canEdit` getter ([`src/domain/ProductionJob.ts`](../src/domain/ProductionJob.ts))
+says only a `"Planned"` job's scope can still change, but
+`PUT /api/production-jobs/:id` had no equivalent server-side check, so a
+`"Completed"` job's `product`/`qty`/`due`/etc. could still be silently
+rewritten via a direct API call.
+
+Fixed the same way as the Shipment bug above: `updateProductionJob`
+([`server/src/controllers/productionJob.controller.ts`](../server/src/controllers/productionJob.controller.ts))
+now fetches the existing job first and rejects with `409 Conflict` if its
+status is already `"Completed"`, before any field update runs. Regression
+tests in
+[`server/src/__tests__/productionJobs.test.ts`](../server/src/__tests__/productionJobs.test.ts)
+(JOB-13) cover both the rejected Completed-job edit and that a
+non-Completed (`"Planned"`) job can still be updated normally — full
+suite passes at 123/123 after the fix.

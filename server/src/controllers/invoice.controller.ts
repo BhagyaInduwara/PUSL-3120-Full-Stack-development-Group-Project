@@ -78,8 +78,27 @@ export async function updateInvoice(req: Request, res: Response): Promise<void> 
   if (req.body?.issueDate !== undefined) patch.issueDate = req.body.issueDate;
   if (req.body?.dueDate !== undefined) patch.dueDate = req.body.dueDate;
 
-  const invoice = await Invoice.findByIdAndUpdate(req.params.id, { $set: patch }, { new: true, runValidators: true });
+  // Optimistic concurrency check — same pattern as order.controller.ts's
+  // updateOrder: fold the client's last-seen updatedAt into the update's
+  // own filter (atomic, no separate read-then-write race window) so a
+  // save against a stale copy is rejected instead of silently overwriting
+  // whatever someone else saved in between.
+  const filter: Record<string, unknown> = { _id: req.params.id };
+  if (req.body?.expectedUpdatedAt !== undefined) {
+    const expected = new Date(req.body.expectedUpdatedAt as string);
+    if (Number.isNaN(expected.getTime())) {
+      res.status(400).json({ error: "expectedUpdatedAt must be a valid date." });
+      return;
+    }
+    filter.updatedAt = expected;
+  }
+
+  const invoice = await Invoice.findOneAndUpdate(filter, { $set: patch }, { new: true, runValidators: true });
   if (!invoice) {
+    if (req.body?.expectedUpdatedAt !== undefined && (await Invoice.exists({ _id: req.params.id }))) {
+      res.status(409).json({ error: "This invoice was changed by someone else. Reload and try again." });
+      return;
+    }
     res.status(404).json({ error: "Invoice not found." });
     return;
   }

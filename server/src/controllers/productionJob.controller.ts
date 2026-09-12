@@ -53,14 +53,29 @@ export const createProductionJob = asyncHandler(async (req: Request, res: Respon
 
 // Update an entire production job
 export const updateProductionJob = asyncHandler(async (req: Request, res: Response) => {
+  const existing = await ProductionJob.findById(req.params.id);
+  if (!existing) {
+    res.status(404).json({ error: "Production job not found" });
+    return;
+  }
+  // Mirrors src/domain/ProductionJob.ts's canEdit getter ("only a Planned
+  // job's scope can still change") — previously only enforced by hiding
+  // the Edit button in the UI, so a direct API call could still silently
+  // rewrite a Completed job's scope. Matches shipment.controller.ts's
+  // Delivered guard for the same class of bug.
+  if (existing.status === "Completed") {
+    res.status(409).json({ error: "This production job has already been completed and can no longer be modified." });
+    return;
+  }
+
   const { product, qty, due, status, progress, orderNumber, customer } = req.body;
-  
+
   const updatedJob = await ProductionJob.findByIdAndUpdate(
     req.params.id,
     { product, qty, due, status, progress, orderNumber, customer },
     { new: true, runValidators: true }
   );
-  
+
   if (!updatedJob) {
     res.status(404).json({ error: "Production job not found" });
     return;

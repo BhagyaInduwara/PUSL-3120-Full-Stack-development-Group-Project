@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { TableSkeleton } from "@/components/ui";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { AdjustStockModal, type AdjustStockData } from "@/components/inventory/AdjustStockModal";
 import { InventoryItem } from "@/domain/InventoryItem";
@@ -51,6 +52,7 @@ async function fetchInventory(): Promise<FetchedInventory> {
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   // InventoryItem uses sku as its id (matching the rest of the app), but PUT
   // requests need the real Mongo _id — kept separately rather than smuggled
   // into the domain class, which has no field for it.
@@ -65,6 +67,8 @@ export default function InventoryPage() {
         setMongoIdBySku(fetched.mongoIdBySku);
       } catch (error) {
         console.error("Error fetching inventory:", error);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -119,7 +123,7 @@ export default function InventoryPage() {
         }
       />
       <div className="flex-1 overflow-auto px-8 pt-6 pb-10">
-        <InventoryTable items={items} />
+        {loading ? <TableSkeleton rows={8} cols={6} /> : <InventoryTable items={items} />}
       </div>
 
       <AdjustStockModal

@@ -48,6 +48,8 @@ server/env
 # personal planning docs 
 *_prd.md
 prd.md
+prd_server_tests_production_inventory_masterdata.md
+
 
 # typescript
 *.tsbuildinfo
@@ -56,3 +58,6 @@ next-env.d.ts
 # local Postman app workspace state (per-machine, tied to a personal cloud workspace id)
 /.postman/
 /postman/
+
+# agent & workflow state
+/.omo/
