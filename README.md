@@ -149,10 +149,14 @@ npm test
 
 **CI** — [`.github/workflows/ci.yml`](.github/workflows/ci.yml) checks out
 the repo, sets up Node 20 with npm caching for both `package-lock.json`
-files, and installs both apps' dependencies on every push/PR. Running the
-test suites themselves in CI is a deliberate follow-up (needs a test
-`MONGODB_URI`/secrets configured in the repo first) — see the commented
-block at the bottom of that file.
+files, installs both apps' dependencies, and runs the backend
+(Jest + Supertest) and frontend (Jest + React Testing Library) suites on
+every push/PR — neither needs any repository secrets, since the backend
+suite starts its own ephemeral in-memory MongoDB and the frontend suite
+is pure component tests. The Playwright E2E suite is a deliberate
+follow-up — it drives the real running app against a real MongoDB
+connection, so it needs a test `MONGODB_URI`/secrets configured in the
+repo first — see the commented block at the bottom of that file.
 
 ## Project structure
 
