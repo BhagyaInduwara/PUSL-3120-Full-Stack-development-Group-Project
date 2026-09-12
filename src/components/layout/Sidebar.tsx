@@ -21,15 +21,36 @@ interface NavItem {
   href: string;
   label: string;
   Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  badge?: string;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
-  { href: "/sales", label: "Sales & Orders", Icon: SalesIcon },
-  { href: "/invoicing", label: "Invoicing", Icon: InvoicingIcon },
-  { href: "/inventory", label: "Inventory", Icon: InventoryIcon },
-  { href: "/shipments", label: "Shipments", Icon: ShipmentIcon },
-  { href: "/production", label: "Production", Icon: ProductionIcon },
+interface NavSection {
+  title?: string;
+  items: NavItem[];
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    items: [
+      { href: "/dashboard", label: "Dashboard", Icon: DashboardIcon },
+    ],
+  },
+  {
+    title: "Operations",
+    items: [
+      { href: "/sales", label: "Sales & Orders", Icon: SalesIcon },
+      { href: "/invoicing", label: "Invoicing", Icon: InvoicingIcon },
+      { href: "/inventory", label: "Inventory", Icon: InventoryIcon },
+      { href: "/shipments", label: "Shipments", Icon: ShipmentIcon },
+      { href: "/production", label: "Production", Icon: ProductionIcon },
+    ],
+  },
+  {
+    title: "Configuration",
+    items: [
+      { href: "/settings", label: "Settings", Icon: SettingsIcon },
+    ],
+  },
 ];
 
 /**
@@ -78,66 +99,95 @@ export function Sidebar({ user }: { user: PublicUser }) {
 
   return (
     <div
-      className="flex-none flex flex-col bg-[var(--color-surface)] border-r border-[var(--color-divider)] transition-[width] duration-150 ease-in-out"
-      style={{ width: expanded ? 224 : 68 }}
+      className="flex-none flex flex-col relative z-20 bg-[var(--color-surface)] border-r border-[var(--color-divider)] shadow-xs transition-[width] duration-200 ease-in-out"
+      style={{ width: expanded ? 250 : 86 }}
     >
-      <div className="flex items-center gap-2.5 px-4 pt-[18px] pb-5">
-        <div className="w-7 h-7 flex-none rounded-lg bg-[var(--color-accent-800)] text-[var(--color-accent-200)] flex items-center justify-center font-[family-name:var(--font-heading)] font-semibold text-sm">
-          F
-        </div>
-        {expanded && (
-          <span className="font-[family-name:var(--font-heading)] font-medium text-[17px] tracking-tight">
-            FlowERP
-          </span>
+      <div className="flex items-center justify-between px-5 py-5 border-b border-[var(--color-divider)] min-h-[72px]">
+        {expanded ? (
+          <div className="flex items-center justify-between w-full min-w-0">
+            <div className="flex flex-col min-w-0">
+              <div className="font-[family-name:var(--font-heading)] text-[20px] font-extrabold tracking-tight leading-none text-[var(--color-text)] flex items-center gap-0.5">
+                <span>Flow</span>
+                <span className="text-[var(--color-accent)]">ERP</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] inline-block ml-0.5 animate-pulse" />
+              </div>
+              <span className="text-[10px] font-semibold text-[var(--color-neutral-400)] tracking-wider uppercase mt-1">
+                Enterprise Suite
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-label="Collapse sidebar"
+              className="p-1.5 rounded-lg text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors"
+            >
+              <span className="text-sm font-semibold">«</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center w-full">
+            <span className="font-[family-name:var(--font-heading)] text-[20px] font-extrabold tracking-tight text-[var(--color-accent)]">
+              F<span className="text-[var(--color-text)]">.</span>
+            </span>
+          </div>
         )}
       </div>
 
-      <nav className="flex flex-col gap-0.5 px-2.5 flex-1">
-        {NAV_ITEMS.map(({ href, label, Icon }) => {
-          const active = pathname?.startsWith(href) ?? false;
-          return (
-            <Link
-              key={href}
-              href={href}
-              title={label}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm w-full text-left ${
-                active
-                  ? "bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] text-[var(--color-accent)]"
-                  : "text-[color-mix(in_srgb,var(--color-text)_75%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)]"
-              }`}
-            >
-              <Icon />
-              {expanded && <span>{label}</span>}
-            </Link>
-          );
-        })}
-
-        <div className="flex-1" />
-
-        <Link
-          href="/settings"
-          title="Settings"
-          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm w-full text-left ${
-            pathname?.startsWith("/settings")
-              ? "bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)] text-[var(--color-accent)]"
-              : "text-[color-mix(in_srgb,var(--color-text)_75%,transparent)] hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)]"
-          }`}
-        >
-          <SettingsIcon />
-          {expanded && <span>Settings</span>}
-        </Link>
+      <nav className={`flex flex-col gap-6 py-5 flex-1 overflow-y-auto ${expanded ? "px-3.5" : "px-3"}`}>
+        {NAV_SECTIONS.map((section, sIdx) => (
+          <div key={sIdx} className="flex flex-col gap-1">
+            {section.title && expanded && (
+              <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-neutral-400)] select-none">
+                {section.title}
+              </div>
+            )}
+            {section.items.map(({ href, label, Icon }) => {
+              const active = pathname?.startsWith(href) ?? false;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  title={label}
+                  className={`flex items-center rounded-xl transition-all duration-150 cursor-pointer group relative ${
+                    expanded
+                      ? "gap-3.5 px-3.5 py-2.5 text-[14px] w-full text-left"
+                      : "justify-center p-3 w-full"
+                  } ${
+                    active
+                      ? "bg-[var(--color-accent)]/12 text-[var(--color-accent)] font-semibold shadow-2xs"
+                      : "text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] font-medium"
+                  }`}
+                >
+                  <Icon
+                    className={`flex-shrink-0 transition-colors ${
+                      expanded ? "w-[18px] h-[18px]" : "w-[22px] h-[22px]"
+                    } ${
+                      active ? "text-[var(--color-accent)]" : "text-[var(--color-neutral-400)] group-hover:text-[var(--color-text)]"
+                    }`}
+                  />
+                  {expanded && <span className="truncate flex-1">{label}</span>}
+                  {active && (
+                    <span className="absolute left-0 top-2 bottom-2 w-1 bg-[var(--color-accent)] rounded-r-full" />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-        className="mx-2.5 mb-2 py-1.5 rounded-lg text-xs text-[var(--color-neutral-500)] hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)]"
-      >
-        {expanded ? "«" : "»"}
-      </button>
+      {!expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-label="Expand sidebar"
+          className="mx-auto mb-3 p-3 rounded-xl text-sm font-bold text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors"
+        >
+          »
+        </button>
+      )}
 
-      <div className="p-3 pt-3.5 border-t border-[var(--color-divider)] flex items-center gap-2.5">
+      <div className="p-3.5 pt-4 border-t border-[var(--color-divider)] flex items-center gap-2.5 bg-[var(--color-surface-subtle)]">
         <div className="min-w-0 flex-1">
           <UserMenu user={user} expanded={expanded} onOpenProfile={() => setProfileOpen(true)} />
         </div>

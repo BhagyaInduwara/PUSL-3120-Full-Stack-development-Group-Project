@@ -20,6 +20,14 @@ const COLUMNS: Column[] = [
   { status: "Closed", label: "Closed", variant: "neutral", dim: true },
 ];
 
+const STATUS_DOTS: Record<OrderStatus, string> = {
+  Draft: "bg-slate-400",
+  Confirmed: "bg-amber-500",
+  Invoiced: "bg-emerald-500",
+  Shipped: "bg-teal-400",
+  Closed: "bg-neutral-500",
+};
+
 interface PendingMove {
   orderId: string;
   status: OrderStatus;
@@ -58,12 +66,18 @@ export function OrderBoard({ orders, showStages = true, pendingMove, onMove, onS
             key={col.status}
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop(col.status)}
-            className="min-h-[120px]"
+            className="min-h-[160px] rounded-xl bg-[var(--color-surface-subtle)]/50 p-2 border border-[var(--color-divider)]/50 transition-colors duration-150 hover:border-[var(--color-divider)]"
           >
-            <div className={`flex items-center justify-between mb-2.5 ${col.dim ? "opacity-60" : ""}`}>
-              <span className="text-xs font-semibold tracking-wide">
-                {col.label} <span className="font-normal text-[var(--color-neutral-500)]">{columnTotal.format()}</span>
-              </span>
+            <div className={`flex items-center justify-between mb-3 px-1.5 pt-1 ${col.dim ? "opacity-60" : ""}`}>
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${STATUS_DOTS[col.status]}`} />
+                <span className="text-xs font-semibold tracking-wide text-[var(--color-text)]">
+                  {col.label}
+                </span>
+                <span className="font-normal text-[11px] text-[var(--color-neutral-400)] tabular-nums">
+                  {columnTotal.format()}
+                </span>
+              </div>
               <Tag variant={col.variant}>{columnOrders.length}</Tag>
             </div>
             <div className="flex flex-col gap-2.5">

@@ -46,17 +46,20 @@ export function UserMenu({ user, expanded, onOpenProfile }: UserMenuProps) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex items-center gap-2.5 w-full text-left rounded-lg p-1 -m-1 cursor-pointer hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)]"
+        className="flex items-center gap-2.5 w-full text-left rounded-xl p-1.5 cursor-pointer hover:bg-[var(--color-surface-hover)] transition-colors group"
       >
-        <div className="w-[30px] h-[30px] flex-none rounded-full bg-[var(--color-neutral-800)] flex items-center justify-center text-xs font-semibold text-[var(--color-neutral-200)]">
-          {initials(user.username)}
+        <div className="relative">
+          <div className="w-[32px] h-[32px] flex-none rounded-full bg-[var(--color-accent)] text-white flex items-center justify-center text-xs font-semibold shadow-xs">
+            {initials(user.username)}
+          </div>
+          <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-400 border border-[var(--color-surface)]" />
         </div>
         {expanded && (
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] leading-tight whitespace-nowrap overflow-hidden text-ellipsis capitalize">
+            <div className="text-[13px] font-semibold text-[var(--color-text)] leading-tight whitespace-nowrap overflow-hidden text-ellipsis capitalize">
               {user.username}
             </div>
-            <div className="text-[11px] text-[var(--color-neutral-500)] capitalize">{user.role}</div>
+            <div className="text-[11px] font-medium text-[var(--color-neutral-400)] capitalize">{user.role}</div>
           </div>
         )}
       </button>
@@ -64,8 +67,13 @@ export function UserMenu({ user, expanded, onOpenProfile }: UserMenuProps) {
       {open && (
         <div
           role="menu"
-          className="absolute bottom-0 left-full ml-2 z-30 w-[196px] flex flex-col gap-1 p-1.5 rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-divider)] shadow-[var(--shadow-lg)]"
+          className="absolute bottom-0 left-full ml-3 z-30 w-[210px] flex flex-col gap-1.5 p-2 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-divider)] shadow-lg [box-shadow:var(--shadow-lg),var(--card-inset-highlight)] text-[var(--color-text)] animate-modal-in"
         >
+          <div className="px-2.5 py-1 border-b border-[var(--color-divider)]">
+            <div className="text-xs font-semibold text-[var(--color-text)] capitalize">{user.username}</div>
+            <div className="text-[11px] text-[var(--color-neutral-400)] capitalize">{user.role} Account</div>
+          </div>
+
           <button
             type="button"
             role="menuitem"
@@ -73,13 +81,13 @@ export function UserMenu({ user, expanded, onOpenProfile }: UserMenuProps) {
               setOpen(false);
               onOpenProfile();
             }}
-            className="px-2.5 py-2 rounded-lg text-sm text-left text-[var(--color-text)] hover:bg-[color-mix(in_srgb,var(--color-text)_6%,transparent)] cursor-pointer"
+            className="px-2.5 py-1.5 rounded-xl text-xs font-medium text-left text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors"
           >
-            Profile
+            Edit Profile
           </button>
 
-          <div className="px-2.5 pt-1.5 pb-2">
-            <div className="text-[11px] text-[var(--color-neutral-500)] mb-1.5">Appearance</div>
+          <div className="px-2.5 pt-1.5 pb-1 border-t border-[var(--color-divider)]">
+            <div className="text-[11px] font-medium text-[var(--color-neutral-400)] mb-1.5">Theme</div>
             <SegmentedControl
               name="theme"
               value={theme}

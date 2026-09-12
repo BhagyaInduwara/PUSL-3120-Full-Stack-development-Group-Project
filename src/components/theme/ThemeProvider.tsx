@@ -28,9 +28,9 @@ function applyTheme(theme: Theme) {
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof document === "undefined") return "dark";
+    if (typeof document === "undefined") return "light";
     const attr = document.documentElement.getAttribute("data-theme");
-    return attr === "light" ? "light" : "dark";
+    return attr === "dark" ? "dark" : "light";
   });
 
   function setTheme(next: Theme) {

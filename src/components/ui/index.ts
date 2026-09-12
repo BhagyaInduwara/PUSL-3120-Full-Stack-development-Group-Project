@@ -5,3 +5,5 @@ export * from "./Table";
 export * from "./Dialog";
 export * from "./SegmentedControl";
 export * from "./Input";
+export * from "./CountUp";
+export * from "./Skeleton";

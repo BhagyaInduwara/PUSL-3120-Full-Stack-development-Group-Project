@@ -112,17 +112,39 @@ export async function updateShipment(req: Request, res: Response): Promise<void>
   }
   if (req.body?.date !== undefined) patch.date = req.body.date;
 
-  const shipment = await Shipment.findByIdAndUpdate(
-    req.params.id,
+  // Optimistic concurrency check — same pattern as order.controller.ts's
+  // updateOrder: fold the client's last-seen updatedAt into the update's
+  // own filter (atomic, no separate read-then-write race window) so a
+  // save against a stale copy is rejected instead of silently overwriting
+  // whatever someone else saved in between. (The Delivered guard above
+  // already read `existing` once, but that read is only used to check
+  // status, not as the concurrency token — this filter is a second,
+  // independent condition evaluated atomically by MongoDB itself.)
+  const filter: Record<string, unknown> = { _id: req.params.id };
+  if (req.body?.expectedUpdatedAt !== undefined) {
+    const expected = new Date(req.body.expectedUpdatedAt as string);
+    if (Number.isNaN(expected.getTime())) {
+      res.status(400).json({ error: "expectedUpdatedAt must be a valid date." });
+      return;
+    }
+    filter.updatedAt = expected;
+  }
+
+  const shipment = await Shipment.findOneAndUpdate(
+    filter,
     { $set: patch },
     { new: true, runValidators: true }
   ).populate("orderId").populate("invoiceId", "number");
-  
+
   if (!shipment) {
+    if (req.body?.expectedUpdatedAt !== undefined && (await Shipment.exists({ _id: req.params.id }))) {
+      res.status(409).json({ error: "This shipment was changed by someone else. Reload and try again." });
+      return;
+    }
     res.status(404).json({ error: "Shipment not found." });
     return;
   }
-  
+
   const publicShipment = toPublicShipment(shipment);
 
   // Emit the granular status event only if the status was actually updated

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { BoardSkeleton, TableSkeleton } from "@/components/ui";
 import { PlusIcon } from "@/components/icons";
 import { Order, type OrderStatus, type OrderLineItem, type OrderEditableFields } from "@/domain/Order";
 import { IncomingOrderDraft, type DraftLineItem } from "@/domain/IncomingOrderDraft";
@@ -28,6 +29,7 @@ interface ApiOrder {
   lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
+  updatedAt: string;
 }
 
 interface ApiDraft {
@@ -55,6 +57,7 @@ function toOrder(o: ApiOrder): Order {
     lineItems: o.lineItems,
     status: o.status,
     date: new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    updatedAt: o.updatedAt,
   });
 }
 
@@ -135,6 +138,7 @@ export default function SalesPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [jobs, setJobs] = useState<ProductionJob[]>([]);
   const [draft, setDraft] = useState<IncomingOrderDraft | null>(null);
+  const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>("board");
   const [showStages, setShowStages] = useState(true);
   const [search, setSearch] = useState("");
@@ -153,14 +157,18 @@ export default function SalesPage() {
 
   useEffect(() => {
     (async () => {
-      const [ordersResult, jobsResult, draftResult] = await Promise.all([fetchOrders(), fetchJobs(), fetchFirstDraft()]);
-      setOrders(ordersResult.data);
-      setJobs(jobsResult.data);
-      setDraft(draftResult.data);
+      try {
+        const [ordersResult, jobsResult, draftResult] = await Promise.all([fetchOrders(), fetchJobs(), fetchFirstDraft()]);
+        setOrders(ordersResult.data);
+        setJobs(jobsResult.data);
+        setDraft(draftResult.data);
 
-      const anyOffline = ordersResult.offline || jobsResult.offline || draftResult.offline;
-      setOffline(anyOffline);
-      setCachedAt(anyOffline ? ordersResult.cachedAt ?? jobsResult.cachedAt ?? draftResult.cachedAt ?? null : null);
+        const anyOffline = ordersResult.offline || jobsResult.offline || draftResult.offline;
+        setOffline(anyOffline);
+        setCachedAt(anyOffline ? ordersResult.cachedAt ?? jobsResult.cachedAt ?? draftResult.cachedAt ?? null : null);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -245,13 +253,28 @@ export default function SalesPage() {
         credentials: "include",
         // The update endpoint replaces the whole record, so unchanged fields
         // are sent as-is (status included) rather than left undefined.
+        // expectedUpdatedAt is the value this dialog was opened with — the
+        // backend (order.controller.ts's updateOrder) rejects the write
+        // with 409 if the order's real updatedAt has moved on since, i.e.
+        // someone else saved a change while this dialog was open.
         body: JSON.stringify({
           customer: patch.customer ?? selectedOrder.customer,
           lineItems: patch.lineItems ?? selectedOrder.lineItems,
           status: selectedOrder.status,
           date: patch.date ?? selectedOrder.date,
+          expectedUpdatedAt: selectedOrder.updatedAt,
         }),
       });
+      if (res.status === 409) {
+        // Someone else saved a change to this order while the dialog was
+        // open — refresh so the board/table reflect their edit, and tell
+        // the user plainly rather than silently discarding either side's
+        // work.
+        setSelectedOrder(null);
+        await refreshOrders();
+        setActionError("Someone else updated this order while you were editing it. Your changes were not saved — please reopen it and try again.");
+        return;
+      }
       if (!res.ok) throw new Error(`PUT order failed: ${res.status}`);
       setSelectedOrder(null);
       await refreshOrders();
@@ -400,7 +423,9 @@ export default function SalesPage() {
               </button>
             </div>
           )}
-          {view === "table" ? (
+          {loading ? (
+            view === "table" ? <TableSkeleton rows={8} cols={6} /> : <BoardSkeleton columns={5} />
+          ) : view === "table" ? (
             <OrderTable orders={filtered} onSelect={setSelectedOrder} />
           ) : (
             <OrderBoard

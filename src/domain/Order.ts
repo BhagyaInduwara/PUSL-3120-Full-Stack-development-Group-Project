@@ -25,6 +25,14 @@ export interface OrderProps {
   lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
+  /**
+   * Server-assigned last-modified timestamp (ISO string), sent back as
+   * `expectedUpdatedAt` on the next PUT so the backend can detect a
+   * conflicting edit — see order.controller.ts's updateOrder — instead of
+   * silently overwriting a change another client saved in between. Never
+   * set locally; always comes from the server's own response.
+   */
+  updatedAt: string;
 }
 
 export interface OrderEditableFields {
@@ -46,6 +54,7 @@ export interface OrderEditableFields {
  */
 export class Order extends StatusfulEntity {
   readonly number: string;
+  readonly updatedAt: string;
   private _customer: string;
   private _lineItems: OrderLineItem[];
   private _date: string;
@@ -54,6 +63,7 @@ export class Order extends StatusfulEntity {
   constructor(props: OrderProps) {
     super(props.id);
     this.number = props.number;
+    this.updatedAt = props.updatedAt;
     this._customer = props.customer;
     this._lineItems = props.lineItems.map((li) => ({ ...li }));
     this._date = props.date;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { TableSkeleton } from "@/components/ui";
 import { ShipmentTable } from "@/components/shipments/ShipmentTable";
 import { ShipmentDetailDialog } from "@/components/shipments/ShipmentDetailDialog";
 import { NewShipmentDialog, type NewShipmentData } from "@/components/shipments/NewShipmentDialog";
@@ -25,6 +26,7 @@ interface ApiOrderEmbed {
   lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
+  updatedAt: string;
 }
 
 interface ApiShipment {
@@ -36,6 +38,7 @@ interface ApiShipment {
   invoice?: { id: string; number: string };
   status: ShipmentStatus;
   date: string;
+  updatedAt: string;
 }
 
 interface FetchResult<T> {
@@ -53,6 +56,7 @@ function toOrder(o: ApiOrderEmbed): Order {
     lineItems: o.lineItems,
     status: o.status,
     date: fmtDate(o.date),
+    updatedAt: o.updatedAt,
   });
 }
 
@@ -65,6 +69,7 @@ function toShipment(s: ApiShipment): Shipment {
     invoiceNumber: s.invoice?.number ?? null,
     status: s.status,
     date: fmtDate(s.date),
+    updatedAt: s.updatedAt,
   });
 }
 
@@ -99,6 +104,7 @@ export default function ShipmentsPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
   const [cachedAt, setCachedAt] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -110,6 +116,8 @@ export default function ShipmentsPage() {
         setCachedAt(result.offline ? result.cachedAt ?? null : null);
       } catch (error) {
         console.error("Error fetching shipments:", error);
+      } finally {
+        setLoading(false);
       }
     })();
   }, []);
@@ -137,12 +145,23 @@ export default function ShipmentsPage() {
     if (!selectedShipment) return;
     setActionError(null);
     try {
+      // expectedUpdatedAt is the value this dialog was opened with — the
+      // backend (shipment.controller.ts's updateShipment) rejects the
+      // write with 409 if someone else saved a change to this shipment
+      // since, rather than silently overwriting it. Same pattern as
+      // sales/page.tsx's handleSaveOrder.
       const res = await fetch(`${API_URL}/api/shipments/${selectedShipment.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(patch),
+        body: JSON.stringify({ ...patch, expectedUpdatedAt: selectedShipment.updatedAt }),
       });
+      if (res.status === 409) {
+        setSelectedShipment(null);
+        await refreshShipments();
+        setActionError("Someone else updated this shipment while you were editing it. Your changes were not saved — please reopen it and try again.");
+        return;
+      }
       if (!res.ok) throw new Error(`PUT /api/shipments failed: ${res.status}`);
       setSelectedShipment(null);
       await refreshShipments();
@@ -247,7 +266,11 @@ export default function ShipmentsPage() {
           </div>
         )}
 
-        <ShipmentTable shipments={shipments} orderById={orderById} onSelect={setSelectedShipment} />
+        {loading ? (
+          <TableSkeleton rows={7} cols={6} />
+        ) : (
+          <ShipmentTable shipments={shipments} orderById={orderById} onSelect={setSelectedShipment} />
+        )}
       </div>
 
       {selectedShipment && (

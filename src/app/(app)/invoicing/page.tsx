@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { TableSkeleton } from "@/components/ui";
 import { InvoiceTable } from "@/components/invoicing/InvoiceTable";
 import { InvoiceDetailDialog } from "@/components/invoicing/InvoiceDetailDialog";
 import { NewInvoiceDialog, type NewInvoiceData } from "@/components/invoicing/NewInvoiceDialog";
@@ -26,6 +27,7 @@ interface ApiOrderEmbed {
   lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
+  updatedAt: string;
 }
 
 interface ApiInvoice {
@@ -36,6 +38,7 @@ interface ApiInvoice {
   status: InvoiceStatus;
   issueDate: string;
   dueDate: string;
+  updatedAt: string;
 }
 
 function toOrder(o: ApiOrderEmbed): Order {
@@ -46,6 +49,7 @@ function toOrder(o: ApiOrderEmbed): Order {
     lineItems: o.lineItems,
     status: o.status,
     date: fmtDate(o.date),
+    updatedAt: o.updatedAt,
   });
 }
 
@@ -57,6 +61,7 @@ function toInvoice(i: ApiInvoice): Invoice {
     status: i.status,
     issueDate: fmtDate(i.issueDate),
     dueDate: fmtDate(i.dueDate),
+    updatedAt: i.updatedAt,
   });
 }
 
@@ -81,15 +86,20 @@ async function fetchInvoices(): Promise<{ invoices: Invoice[]; orderById: Map<st
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [orderById, setOrderById] = useState<Map<string, Order>>(new Map());
+  const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [newInvoiceOpen, setNewInvoiceOpen] = useState(false);
   const [newInvoiceError, setNewInvoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { invoices, orderById } = await fetchInvoices();
-      setInvoices(invoices);
-      setOrderById(orderById);
+      try {
+        const { invoices, orderById } = await fetchInvoices();
+        setInvoices(invoices);
+        setOrderById(orderById);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -113,12 +123,20 @@ export default function InvoicingPage() {
   async function handleSave(patch: Partial<InvoiceEditableFields>) {
     if (!selectedInvoice) return;
     try {
-      await fetch(`${API_URL}/api/invoices/${selectedInvoice.id}`, {
+      // expectedUpdatedAt is the value this dialog was opened with — the
+      // backend (invoice.controller.ts's updateInvoice) rejects the write
+      // with 409 if someone else saved a change to this invoice since,
+      // rather than silently overwriting it. See sales/page.tsx's
+      // handleSaveOrder for the same pattern with a user-facing message.
+      const res = await fetch(`${API_URL}/api/invoices/${selectedInvoice.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(patch),
+        body: JSON.stringify({ ...patch, expectedUpdatedAt: selectedInvoice.updatedAt }),
       });
+      if (res.status === 409) {
+        console.error("Conflicting edit: this invoice was changed by someone else since it was opened.");
+      }
       setSelectedInvoice(null);
       const { invoices, orderById } = await fetchInvoices();
       setInvoices(invoices);
@@ -180,7 +198,11 @@ export default function InvoicingPage() {
         }
       />
       <div className="flex-1 overflow-auto px-8 pt-6 pb-10">
-        <InvoiceTable invoices={invoices} orderById={orderById} onSelect={setSelectedInvoice} />
+        {loading ? (
+          <TableSkeleton rows={7} cols={6} />
+        ) : (
+          <InvoiceTable invoices={invoices} orderById={orderById} onSelect={setSelectedInvoice} />
+        )}
       </div>
 
       {selectedInvoice && (
