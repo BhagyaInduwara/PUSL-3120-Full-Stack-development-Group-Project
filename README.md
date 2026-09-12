@@ -15,7 +15,7 @@ PUSL 3120 Full-Stack Development group project.
 | Real-time | Socket.io (server + client), authenticated over the session cookie |
 | Auth | Custom JWT session (httpOnly cookie), register/login/logout, role-gated routes |
 | Testing | Playwright (E2E), Jest + React Testing Library (frontend unit), Jest + Supertest (server integration, ephemeral `mongodb-memory-server`) |
-| CI | GitHub Actions (environment + install; see [Testing](#testing)) |
+| CI | GitHub Actions — runs backend + frontend tests on every push/PR; see [Testing](#testing) |
 | DevOps | Docker (multi-stage builds for client + server), nginx reverse proxy, Docker Compose |
 
 See [`CLAUDE.md`](CLAUDE.md) for the full build log and architecture
@@ -186,9 +186,11 @@ docker-compose.yml  Wires client + server + nginx together
   explicit token-based handshake if the frontend and backend ever end up
   on genuinely different domains in production — see
   `server/src/realtime/socket.ts`'s own comment.
-- **CI installs but doesn't yet run the test suites** (see
-  [Testing](#testing) above) — deliberately deferred until a dedicated
-  test database/secrets are configured for GitHub Actions.
+- **CI runs the backend and frontend suites but not E2E yet** (see
+  [Testing](#testing) above) — Playwright is deliberately deferred until a
+  dedicated test `MONGODB_URI`/secrets are configured for GitHub Actions,
+  since it drives the real app against a real MongoDB connection rather
+  than the ephemeral in-memory database the other two suites use.
 - **Real-time sync covers Sales & Orders, Invoicing, Shipments, and the
   Production board** (Order, Order Draft, Invoice, Shipment, and
   Production Job broadcast changes over Socket.io — see

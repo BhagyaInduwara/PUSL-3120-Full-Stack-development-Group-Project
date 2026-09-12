@@ -150,4 +150,44 @@ describe("Production Jobs /api/production-jobs", () => {
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("Not authenticated.");
   });
+
+  // JOB-13: regression test for the same class of bug fixed for Shipment
+  // "Delivered" (see docs/bug-report.md) — src/domain/ProductionJob.ts's
+  // canEdit getter documents "only a Planned job's scope can still change",
+  // but PUT /api/production-jobs/:id never checked that server-side.
+  describe("PUT /api/production-jobs/:id on a Completed job", () => {
+    it("is rejected (409) and leaves the job's fields unchanged", async () => {
+      const created = await createJob({ product: "Executive Desk – Walnut", qty: 5 });
+      const jobId = created.body.productionJob._id;
+
+      await request(app)
+        .patch(`/api/production-jobs/${jobId}/status`)
+        .set("Cookie", cookie)
+        .send({ status: "Completed", progress: 100 });
+
+      const res = await request(app)
+        .put(`/api/production-jobs/${jobId}`)
+        .set("Cookie", cookie)
+        .send({ product: "Task Chair – Mesh Back", qty: 12 });
+
+      expect(res.status).toBe(409);
+
+      const stillThere = await request(app).get(`/api/production-jobs/${jobId}`).set("Cookie", cookie);
+      expect(stillThere.body.productionJob.product).toBe("Executive Desk – Walnut");
+      expect(stillThere.body.productionJob.qty).toBe(5);
+    });
+
+    it("still allows updating a non-Completed (e.g. Planned) job", async () => {
+      const created = await createJob({ product: "Executive Desk – Walnut", qty: 5 });
+      const jobId = created.body.productionJob._id;
+
+      const res = await request(app)
+        .put(`/api/production-jobs/${jobId}`)
+        .set("Cookie", cookie)
+        .send({ product: "Task Chair – Mesh Back", qty: 12, due: "2026-09-10" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.productionJob.product).toBe("Task Chair – Mesh Back");
+    });
+  });
 });
