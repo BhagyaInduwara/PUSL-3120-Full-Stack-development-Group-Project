@@ -133,6 +133,34 @@ describe("Shipments API", () => {
       expect(res.status).toBe(200);
       expect(res.body.shipment.invoiceId).toBe(invoice.id);
     });
+
+    // Same optimistic-concurrency mechanism as Order/Invoice — see
+    // orders.test.ts's matching test for the full explanation.
+    it("rejects a stale concurrent edit with 409 instead of silently overwriting the first client's save", async () => {
+      const order = await createTestOrder(app);
+      const created = await request(app)
+        .post("/api/shipments")
+        .set("Cookie", authCookie())
+        .send({ orderId: order._id, date: "2026-02-01" });
+      const shipmentId = created.body.shipment.id;
+      const staleUpdatedAt = created.body.shipment.updatedAt;
+
+      const clientA = await request(app)
+        .put(`/api/shipments/${shipmentId}`)
+        .set("Cookie", authCookie())
+        .send({ date: "2026-03-01", expectedUpdatedAt: staleUpdatedAt });
+      expect(clientA.status).toBe(200);
+
+      const clientB = await request(app)
+        .put(`/api/shipments/${shipmentId}`)
+        .set("Cookie", authCookie())
+        .send({ date: "2026-04-01", expectedUpdatedAt: staleUpdatedAt });
+      expect(clientB.status).toBe(409);
+      expect(clientB.body.error).toMatch(/changed by someone else/i);
+
+      const current = await request(app).get(`/api/shipments/${shipmentId}`).set("Cookie", authCookie());
+      expect(new Date(current.body.shipment.date).toISOString().slice(0, 10)).toBe("2026-03-01");
+    });
   });
 
   describe("PATCH /api/shipments/:id/dispatch and /deliver", () => {

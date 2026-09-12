@@ -88,12 +88,30 @@ export async function updateOrder(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // number is assigned once at creation and never client-editable — strip it
-  // even if a PUT body includes one, rather than trust the caller.
-  const { number: _ignoredNumber, ...editableFields } = req.body ?? {};
+  // number is assigned once at creation and never client-editable, and
+  // expectedUpdatedAt is a concurrency token, not a field to save — strip
+  // both even if a PUT body includes them, rather than trust the caller.
+  const { number: _ignoredNumber, expectedUpdatedAt, ...editableFields } = req.body ?? {};
 
-  const order = await Order.findByIdAndUpdate(
-    req.params.id,
+  // Optimistic concurrency check: if the client tells us which updatedAt
+  // it last read (every edit dialog does — see OrderDetailDialog), fold
+  // that into the update's own filter so the write only applies if
+  // nobody else has saved a change since. This is atomic — done as one
+  // findOneAndUpdate, not a separate read-then-write — so two requests
+  // racing each other can't both pass a check and then both write; the
+  // second one to reach MongoDB simply matches zero documents.
+  const filter: Record<string, unknown> = { _id: req.params.id };
+  if (expectedUpdatedAt !== undefined) {
+    const expected = new Date(expectedUpdatedAt as string);
+    if (Number.isNaN(expected.getTime())) {
+      res.status(400).json({ error: "expectedUpdatedAt must be a valid date." });
+      return;
+    }
+    filter.updatedAt = expected;
+  }
+
+  const order = await Order.findOneAndUpdate(
+    filter,
     editableFields,
     {
       new: true,           // return the document AFTER the update
@@ -102,6 +120,14 @@ export async function updateOrder(req: Request, res: Response): Promise<void> {
   );
 
   if (!order) {
+    // filter matched nothing — either this id doesn't exist at all, or it
+    // exists but its updatedAt has moved on since the client last read it
+    // (someone else saved a change in between). Tell those two cases
+    // apart so a real 404 doesn't get misreported as a conflict.
+    if (expectedUpdatedAt !== undefined && (await Order.exists({ _id: req.params.id }))) {
+      res.status(409).json({ error: "This order was changed by someone else. Reload and try again." });
+      return;
+    }
     res.status(404).json({ error: "Order not found." });
     return;
   }

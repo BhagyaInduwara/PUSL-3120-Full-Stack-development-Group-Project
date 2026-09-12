@@ -34,6 +34,7 @@ interface ApiOrder {
   lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
+  updatedAt: string;
 }
 
 interface ApiProductionJob {
@@ -90,6 +91,7 @@ function toOrder(o: ApiOrder): Order {
     lineItems: o.lineItems,
     status: o.status,
     date: new Date(o.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    updatedAt: o.updatedAt,
   });
 }
 

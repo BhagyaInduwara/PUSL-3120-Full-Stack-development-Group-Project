@@ -153,6 +153,65 @@ describe("Orders API", () => {
       expect(res.body.number).toBe(originalNumber);
       expect(res.body.customer).toBe("B");
     });
+
+    it("accepts the update when expectedUpdatedAt matches the record's current value", async () => {
+      const create = await request(app)
+        .post("/api/orders")
+        .set("Cookie", authCookie())
+        .send({ customer: "A", date: "2026-01-01", lineItems: [{ product: "X", qty: 1, price: 1 }] });
+
+      const res = await request(app)
+        .put(`/api/orders/${create.body._id}`)
+        .set("Cookie", authCookie())
+        .send({ customer: "B", expectedUpdatedAt: create.body.updatedAt });
+
+      expect(res.status).toBe(200);
+      expect(res.body.customer).toBe("B");
+    });
+
+    // Concurrency: two clients open the same order for editing at the same
+    // time, so both read the same updatedAt. Client A saves first and
+    // succeeds; client B's save is still carrying that now-stale
+    // updatedAt. This asserts B's write is REJECTED with 409 rather than
+    // silently overwriting A's change — the exact "detect a conflicting
+    // update instead of losing data" requirement.
+    it("rejects a stale concurrent edit with 409 instead of silently overwriting the first client's save", async () => {
+      const create = await request(app)
+        .post("/api/orders")
+        .set("Cookie", authCookie())
+        .send({ customer: "Original", date: "2026-01-01", lineItems: [{ product: "X", qty: 1, price: 1 }] });
+      const orderId = create.body._id;
+      const staleUpdatedAt = create.body.updatedAt; // both "clients" read this same value
+
+      // Client A saves first — succeeds, and the order's updatedAt moves on.
+      const clientA = await request(app)
+        .put(`/api/orders/${orderId}`)
+        .set("Cookie", authCookie())
+        .send({ customer: "Client A's edit", expectedUpdatedAt: staleUpdatedAt });
+      expect(clientA.status).toBe(200);
+      expect(clientA.body.customer).toBe("Client A's edit");
+
+      // Client B still has the OLD updatedAt from before A's save.
+      const clientB = await request(app)
+        .put(`/api/orders/${orderId}`)
+        .set("Cookie", authCookie())
+        .send({ customer: "Client B's edit", expectedUpdatedAt: staleUpdatedAt });
+      expect(clientB.status).toBe(409);
+      expect(clientB.body.error).toMatch(/changed by someone else/i);
+
+      // The record must still reflect A's save — B's write must not have
+      // applied at all, not even partially.
+      const current = await request(app).get(`/api/orders/${orderId}`).set("Cookie", authCookie());
+      expect(current.body.customer).toBe("Client A's edit");
+    });
+
+    it("still 404s for a genuinely unknown id, even with an expectedUpdatedAt in the body", async () => {
+      const res = await request(app)
+        .put(`/api/orders/${new mongoose.Types.ObjectId()}`)
+        .set("Cookie", authCookie())
+        .send({ customer: "B", expectedUpdatedAt: new Date().toISOString() });
+      expect(res.status).toBe(404);
+    });
   });
 
   describe("DELETE /api/orders/:id", () => {

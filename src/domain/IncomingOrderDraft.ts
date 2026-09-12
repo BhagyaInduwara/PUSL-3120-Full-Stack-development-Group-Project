@@ -69,6 +69,10 @@ export class IncomingOrderDraft extends Entity {
       lineItems: this.lineItems.map((li) => ({ ...li })),
       status: "Confirmed",
       date,
+      // This Order is being minted fresh, not read from the server, so
+      // there's no real server-assigned updatedAt to carry over yet —
+      // "now" is the only meaningful value until it's actually saved.
+      updatedAt: new Date().toISOString(),
     });
   }
 }
