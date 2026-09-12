@@ -10,6 +10,7 @@ describe("OrderDetailDialog Component", () => {
     customer: "Cyberdyne Systems",
     status: "Draft",
     date: "2026-03-01",
+    updatedAt: "2026-03-01T00:00:00.000Z",
     lineItems: [
       { product: "Neural Processor", qty: 2, price: 1500 },
     ],
@@ -21,6 +22,7 @@ describe("OrderDetailDialog Component", () => {
     customer: "Stark Industries",
     status: "Confirmed",
     date: "2026-03-02",
+    updatedAt: "2026-03-02T00:00:00.000Z",
     lineItems: [
       { product: "Arc Reactor", qty: 1, price: 9000 },
     ],

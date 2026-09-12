@@ -12,6 +12,14 @@ export interface ShipmentProps {
   invoiceNumber: string | null;
   status: ShipmentStatus;
   date: string;
+  /**
+   * Server-assigned last-modified timestamp (ISO string), sent back as
+   * `expectedUpdatedAt` on the next PUT so the backend can detect a
+   * conflicting edit — see shipment.controller.ts's updateShipment —
+   * instead of silently overwriting a change another client saved in
+   * between.
+   */
+  updatedAt: string;
 }
 
 export interface ShipmentEditableFields {
@@ -24,6 +32,7 @@ export class Shipment extends StatusfulEntity {
   readonly orderId: string;
   readonly invoiceId: string | null;
   readonly invoiceNumber: string | null;
+  readonly updatedAt: string;
   private _date: string;
   private _status: ShipmentStatus;
 
@@ -33,6 +42,7 @@ export class Shipment extends StatusfulEntity {
     this.orderId = props.orderId;
     this.invoiceId = props.invoiceId;
     this.invoiceNumber = props.invoiceNumber;
+    this.updatedAt = props.updatedAt;
     this._date = props.date;
     this._status = props.status;
   }

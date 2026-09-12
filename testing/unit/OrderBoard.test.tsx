@@ -11,6 +11,7 @@ describe("OrderBoard Component", () => {
       customer: "Acme Corp",
       status: "Draft",
       date: "2026-03-01",
+      updatedAt: "2026-03-01T00:00:00.000Z",
       lineItems: [{ product: "Desk Chair", qty: 2, price: 1500 }],
     }),
     new Order({
@@ -19,6 +20,7 @@ describe("OrderBoard Component", () => {
       customer: "Globex Inc",
       status: "Draft",
       date: "2026-03-02",
+      updatedAt: "2026-03-02T00:00:00.000Z",
       lineItems: [{ product: "Standing Desk", qty: 1, price: 5000 }],
     }),
     new Order({
@@ -27,6 +29,7 @@ describe("OrderBoard Component", () => {
       customer: "Soylent Corp",
       status: "Confirmed",
       date: "2026-03-03",
+      updatedAt: "2026-03-03T00:00:00.000Z",
       lineItems: [{ product: "Monitor Arm", qty: 4, price: 2500 }],
     }),
     new Order({
@@ -35,6 +38,7 @@ describe("OrderBoard Component", () => {
       customer: "Initech",
       status: "Shipped",
       date: "2026-03-04",
+      updatedAt: "2026-03-04T00:00:00.000Z",
       lineItems: [{ product: "Keyboard Tray", qty: 1, price: 1200 }],
     }),
   ];

@@ -10,6 +10,13 @@ export interface InvoiceProps {
   status: InvoiceStatus;
   issueDate: string;
   dueDate: string;
+  /**
+   * Server-assigned last-modified timestamp (ISO string), sent back as
+   * `expectedUpdatedAt` on the next PUT so the backend can detect a
+   * conflicting edit — see invoice.controller.ts's updateInvoice — instead
+   * of silently overwriting a change another client saved in between.
+   */
+  updatedAt: string;
 }
 
 export interface InvoiceEditableFields {
@@ -23,6 +30,7 @@ export interface InvoiceEditableFields {
 export class Invoice extends StatusfulEntity {
   readonly number: string;
   readonly orderId: string;
+  readonly updatedAt: string;
   private _issueDate: string;
   private _dueDate: string;
   private _status: InvoiceStatus;
@@ -31,6 +39,7 @@ export class Invoice extends StatusfulEntity {
     super(props.id);
     this.number = props.number;
     this.orderId = props.orderId;
+    this.updatedAt = props.updatedAt;
     this._issueDate = props.issueDate;
     this._dueDate = props.dueDate;
     this._status = props.status;

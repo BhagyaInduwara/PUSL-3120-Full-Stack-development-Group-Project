@@ -26,6 +26,7 @@ interface ApiOrderEmbed {
   lineItems: OrderLineItem[];
   status: OrderStatus;
   date: string;
+  updatedAt: string;
 }
 
 interface ApiInvoice {
@@ -36,6 +37,7 @@ interface ApiInvoice {
   status: InvoiceStatus;
   issueDate: string;
   dueDate: string;
+  updatedAt: string;
 }
 
 function toOrder(o: ApiOrderEmbed): Order {
@@ -46,6 +48,7 @@ function toOrder(o: ApiOrderEmbed): Order {
     lineItems: o.lineItems,
     status: o.status,
     date: fmtDate(o.date),
+    updatedAt: o.updatedAt,
   });
 }
 
@@ -57,6 +60,7 @@ function toInvoice(i: ApiInvoice): Invoice {
     status: i.status,
     issueDate: fmtDate(i.issueDate),
     dueDate: fmtDate(i.dueDate),
+    updatedAt: i.updatedAt,
   });
 }
 
@@ -113,12 +117,20 @@ export default function InvoicingPage() {
   async function handleSave(patch: Partial<InvoiceEditableFields>) {
     if (!selectedInvoice) return;
     try {
-      await fetch(`${API_URL}/api/invoices/${selectedInvoice.id}`, {
+      // expectedUpdatedAt is the value this dialog was opened with — the
+      // backend (invoice.controller.ts's updateInvoice) rejects the write
+      // with 409 if someone else saved a change to this invoice since,
+      // rather than silently overwriting it. See sales/page.tsx's
+      // handleSaveOrder for the same pattern with a user-facing message.
+      const res = await fetch(`${API_URL}/api/invoices/${selectedInvoice.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(patch),
+        body: JSON.stringify({ ...patch, expectedUpdatedAt: selectedInvoice.updatedAt }),
       });
+      if (res.status === 409) {
+        console.error("Conflicting edit: this invoice was changed by someone else since it was opened.");
+      }
       setSelectedInvoice(null);
       const { invoices, orderById } = await fetchInvoices();
       setInvoices(invoices);
