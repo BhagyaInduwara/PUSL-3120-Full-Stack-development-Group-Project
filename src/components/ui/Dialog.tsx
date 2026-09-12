@@ -1,26 +1,44 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 interface DialogProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
   actions: ReactNode;
+  className?: string;
 }
 
-/** Dialog — centered modal used for short forms (e.g. Add customer). For the wide slide-over panel see sales/NewOrderDrawer.tsx. */
-export function Dialog({ title, onClose, children, actions }: DialogProps) {
+export function Dialog({ title, onClose, children, actions, className = "" }: DialogProps) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center p-[var(--space-4)] bg-[color-mix(in_srgb,var(--color-neutral-900)_50%,transparent)]"
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center p-[var(--space-4)] bg-black/40 dark:bg-black/60 backdrop-blur-xs animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[440px] flex flex-col gap-3 p-[var(--space-4)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
+        className={cn(
+          "w-full max-w-[460px] flex flex-col gap-4 p-5 rounded-[var(--radius-lg)] bg-[var(--color-surface)] " +
+          "border border-[var(--color-divider)] shadow-[var(--shadow-lg)] [box-shadow:var(--shadow-lg),var(--card-inset-highlight)] " +
+          "animate-modal-in",
+          className
+        )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="font-[family-name:var(--font-heading)] font-medium text-xl">{title}</div>
-        <div className="flex flex-col gap-3 text-sm opacity-85">{children}</div>
-        <div className="flex justify-end gap-2 mt-2">{actions}</div>
+        <div className="font-[family-name:var(--font-heading)] font-semibold text-lg text-[var(--color-text)] tracking-tight">
+          {title}
+        </div>
+        <div className="flex flex-col gap-3 text-sm text-[var(--color-neutral-300)]">{children}</div>
+        <div className="flex justify-end gap-2.5 pt-2 border-t border-[var(--color-divider)]">{actions}</div>
       </div>
     </div>
   );

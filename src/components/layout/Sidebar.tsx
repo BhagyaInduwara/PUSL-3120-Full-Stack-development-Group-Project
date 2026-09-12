@@ -99,19 +99,19 @@ export function Sidebar({ user }: { user: PublicUser }) {
 
   return (
     <div
-      className="flex-none flex flex-col relative z-20 bg-white border-r border-slate-200/80 shadow-xs transition-[width] duration-200 ease-in-out"
+      className="flex-none flex flex-col relative z-20 bg-[var(--color-surface)] border-r border-[var(--color-divider)] shadow-xs transition-[width] duration-200 ease-in-out"
       style={{ width: expanded ? 250 : 86 }}
     >
-      <div className="flex items-center justify-between px-5 py-5 border-b border-slate-100 min-h-[72px]">
+      <div className="flex items-center justify-between px-5 py-5 border-b border-[var(--color-divider)] min-h-[72px]">
         {expanded ? (
           <div className="flex items-center justify-between w-full min-w-0">
             <div className="flex flex-col min-w-0">
-              <div className="font-[family-name:var(--font-heading)] text-[20px] font-extrabold tracking-tight leading-none text-slate-900 flex items-center gap-0.5">
+              <div className="font-[family-name:var(--font-heading)] text-[20px] font-extrabold tracking-tight leading-none text-[var(--color-text)] flex items-center gap-0.5">
                 <span>Flow</span>
-                <span className="text-emerald-600">ERP</span>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block ml-0.5 animate-pulse" />
+                <span className="text-[var(--color-accent)]">ERP</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] inline-block ml-0.5 animate-pulse" />
               </div>
-              <span className="text-[10px] font-semibold text-slate-400 tracking-wider uppercase mt-1">
+              <span className="text-[10px] font-semibold text-[var(--color-neutral-400)] tracking-wider uppercase mt-1">
                 Enterprise Suite
               </span>
             </div>
@@ -119,15 +119,15 @@ export function Sidebar({ user }: { user: PublicUser }) {
               type="button"
               onClick={() => setExpanded(false)}
               aria-label="Collapse sidebar"
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer transition-colors"
+              className="p-1.5 rounded-lg text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors"
             >
               <span className="text-sm font-semibold">«</span>
             </button>
           </div>
         ) : (
           <div className="flex items-center justify-center w-full">
-            <span className="font-[family-name:var(--font-heading)] text-[20px] font-extrabold tracking-tight text-emerald-600">
-              F<span className="text-slate-900">.</span>
+            <span className="font-[family-name:var(--font-heading)] text-[20px] font-extrabold tracking-tight text-[var(--color-accent)]">
+              F<span className="text-[var(--color-text)]">.</span>
             </span>
           </div>
         )}
@@ -137,7 +137,7 @@ export function Sidebar({ user }: { user: PublicUser }) {
         {NAV_SECTIONS.map((section, sIdx) => (
           <div key={sIdx} className="flex flex-col gap-1">
             {section.title && expanded && (
-              <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400 select-none">
+              <div className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-[var(--color-neutral-400)] select-none">
                 {section.title}
               </div>
             )}
@@ -150,24 +150,24 @@ export function Sidebar({ user }: { user: PublicUser }) {
                   title={label}
                   className={`flex items-center rounded-xl transition-all duration-150 cursor-pointer group relative ${
                     expanded
-                      ? "gap-3.5 px-3.5 py-3 text-[14.5px] w-full text-left"
+                      ? "gap-3.5 px-3.5 py-2.5 text-[14px] w-full text-left"
                       : "justify-center p-3 w-full"
                   } ${
                     active
-                      ? "bg-emerald-50 text-emerald-800 font-semibold shadow-2xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50/80 font-medium"
+                      ? "bg-[var(--color-accent)]/12 text-[var(--color-accent)] font-semibold shadow-2xs"
+                      : "text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] font-medium"
                   }`}
                 >
                   <Icon
                     className={`flex-shrink-0 transition-colors ${
                       expanded ? "w-[18px] h-[18px]" : "w-[22px] h-[22px]"
                     } ${
-                      active ? "text-emerald-600" : "text-slate-400 group-hover:text-slate-600"
+                      active ? "text-[var(--color-accent)]" : "text-[var(--color-neutral-400)] group-hover:text-[var(--color-text)]"
                     }`}
                   />
                   {expanded && <span className="truncate flex-1">{label}</span>}
                   {active && (
-                    <span className="absolute left-0 top-2 bottom-2 w-1 bg-emerald-600 rounded-r-full" />
+                    <span className="absolute left-0 top-2 bottom-2 w-1 bg-[var(--color-accent)] rounded-r-full" />
                   )}
                 </Link>
               );
@@ -181,13 +181,13 @@ export function Sidebar({ user }: { user: PublicUser }) {
           type="button"
           onClick={() => setExpanded(true)}
           aria-label="Expand sidebar"
-          className="mx-auto mb-3 p-3 rounded-xl text-sm font-bold text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer transition-colors"
+          className="mx-auto mb-3 p-3 rounded-xl text-sm font-bold text-[var(--color-neutral-400)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] cursor-pointer transition-colors"
         >
           »
         </button>
       )}
 
-      <div className="p-3.5 pt-4 border-t border-slate-100 flex items-center gap-2.5 bg-slate-50/50">
+      <div className="p-3.5 pt-4 border-t border-[var(--color-divider)] flex items-center gap-2.5 bg-[var(--color-surface-subtle)]">
         <div className="min-w-0 flex-1">
           <UserMenu user={user} expanded={expanded} onOpenProfile={() => setProfileOpen(true)} />
         </div>

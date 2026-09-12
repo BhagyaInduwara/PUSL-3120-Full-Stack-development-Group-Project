@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/Button";
+import { TableSkeleton } from "@/components/ui";
 import { InvoiceTable } from "@/components/invoicing/InvoiceTable";
 import { InvoiceDetailDialog } from "@/components/invoicing/InvoiceDetailDialog";
 import { NewInvoiceDialog, type NewInvoiceData } from "@/components/invoicing/NewInvoiceDialog";
@@ -81,15 +82,20 @@ async function fetchInvoices(): Promise<{ invoices: Invoice[]; orderById: Map<st
 export default function InvoicingPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [orderById, setOrderById] = useState<Map<string, Order>>(new Map());
+  const [loading, setLoading] = useState(true);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [newInvoiceOpen, setNewInvoiceOpen] = useState(false);
   const [newInvoiceError, setNewInvoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { invoices, orderById } = await fetchInvoices();
-      setInvoices(invoices);
-      setOrderById(orderById);
+      try {
+        const { invoices, orderById } = await fetchInvoices();
+        setInvoices(invoices);
+        setOrderById(orderById);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -180,7 +186,11 @@ export default function InvoicingPage() {
         }
       />
       <div className="flex-1 overflow-auto px-8 pt-6 pb-10">
-        <InvoiceTable invoices={invoices} orderById={orderById} onSelect={setSelectedInvoice} />
+        {loading ? (
+          <TableSkeleton rows={7} cols={6} />
+        ) : (
+          <InvoiceTable invoices={invoices} orderById={orderById} onSelect={setSelectedInvoice} />
+        )}
       </div>
 
       {selectedInvoice && (

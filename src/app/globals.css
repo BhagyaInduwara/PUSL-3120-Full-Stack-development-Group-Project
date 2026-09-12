@@ -27,13 +27,18 @@
  * sidebar's user menu.
  */
 :root {
-  --color-bg: #f1f5f9;
+  --color-bg: #f8fafc;
   --color-surface: #ffffff;
-  --color-surface-hover: #f8fafc;
+  --color-surface-hover: #f1f5f9;
+  --color-surface-subtle: #f8fafc;
+  --color-surface-elevated: #ffffff;
+  --color-border-subtle: #e2e8f0;
   --color-text: #0f172a;
   --color-accent: #059669;
   --color-accent-2: #10b981;
   --color-divider: #e2e8f0;
+  --card-inset-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
+  --color-ring-focus: rgba(5, 150, 105, 0.25);
 
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
@@ -89,10 +94,15 @@
   --color-bg: #09090b;
   --color-surface: #121215;
   --color-surface-hover: #18181b;
+  --color-surface-subtle: #18181b;
+  --color-surface-elevated: #1e1e24;
+  --color-border-subtle: #27272a;
   --color-text: #f4f4f5;
   --color-accent: #10b981;
   --color-accent-2: #34d399;
   --color-divider: #27272a;
+  --card-inset-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  --color-ring-focus: rgba(16, 185, 129, 0.35);
 
   --shadow-sm: 0 0 0 1px #27272a;
   --shadow-md: 0 0 0 1px #27272a, 0 8px 24px -4px rgba(0, 0, 0, 0.65);
@@ -196,6 +206,19 @@ a:hover {
   -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 40%, #000 60%, transparent 100%);
 }
 
+.bg-ambient-glow {
+  background-color: var(--color-bg);
+  background-image: radial-gradient(ellipse 70% 30% at 50% -5%, color-mix(in srgb, var(--color-accent) 7%, transparent), transparent 70%);
+}
+
+.bg-auth-glow {
+  background-color: var(--color-bg);
+  background-image: 
+    radial-gradient(circle at 1px 1px, var(--color-divider) 1px, transparent 0),
+    radial-gradient(ellipse 60% 50% at 50% 45%, color-mix(in srgb, var(--color-accent) 9%, transparent), transparent 75%);
+  background-size: 24px 24px, 100% 100%;
+}
+
 .glow-emerald {
   box-shadow: 0 0 15px -3px rgba(16, 185, 129, 0.25);
 }
@@ -216,4 +239,78 @@ a:hover {
 
 .animate-shine {
   animation: shine 5s linear infinite;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-in {
+  animation: modal-in 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 150ms ease-out forwards;
+}
+
+/* Polished hand-crafted card elevation with top-edge specular highlight */
+.card-elevated {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  box-shadow: var(--shadow-sm), var(--card-inset-highlight);
+}
+
+.card-elevated-hover {
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1), border-color 160ms ease;
+}
+
+.card-elevated-hover:hover {
+  transform: translateY(-1.5px);
+  box-shadow: var(--shadow-md), var(--card-inset-highlight);
+  border-color: color-mix(in srgb, var(--color-divider) 65%, var(--color-accent) 35%);
+}
+
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0px) rotate(var(--rot, 0deg));
+  }
+  50% {
+    transform: translateY(-8px) rotate(var(--rot, 0deg));
+  }
+}
+
+.animate-float-1 {
+  --rot: -2deg;
+  animation: float-gentle 6s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  --rot: 2.5deg;
+  animation: float-gentle 7s ease-in-out infinite 1s;
+}
+
+.animate-float-3 {
+  --rot: 1.5deg;
+  animation: float-gentle 8s ease-in-out infinite 2s;
+}
+
+.animate-float-4 {
+  --rot: -2.5deg;
+  animation: float-gentle 7.5s ease-in-out infinite 0.5s;
 }

@@ -60,9 +60,9 @@ export function RevenueChart({ series }: { series: RevenuePoint[] }) {
         </linearGradient>
       </defs>
 
-      <line x1={0} y1={TOP_Y} x2={560} y2={TOP_Y} stroke="#e2e8f0" strokeWidth={1} strokeDasharray="3 3" opacity={0.7} />
-      <line x1={0} y1={(TOP_Y + BASE_Y) / 2} x2={560} y2={(TOP_Y + BASE_Y) / 2} stroke="#e2e8f0" strokeWidth={1} strokeDasharray="3 3" opacity={0.7} />
-      <line x1={0} y1={BASE_Y} x2={560} y2={BASE_Y} stroke="#cbd5e1" strokeWidth={1} />
+      <line x1={0} y1={TOP_Y} x2={560} y2={TOP_Y} stroke="var(--color-divider)" strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
+      <line x1={0} y1={(TOP_Y + BASE_Y) / 2} x2={560} y2={(TOP_Y + BASE_Y) / 2} stroke="var(--color-divider)" strokeWidth={1} strokeDasharray="3 3" opacity={0.6} />
+      <line x1={0} y1={BASE_Y} x2={560} y2={BASE_Y} stroke="var(--color-divider)" strokeWidth={1} />
 
       <g>
         {bars.map((bar, i) => (
@@ -100,7 +100,7 @@ export function RevenueChart({ series }: { series: RevenuePoint[] }) {
           );
         })}
       </g>
-      <g fill="#64748b" fontSize={12} fontFamily="var(--font-body)">
+      <g fill="var(--color-neutral-400)" fontSize={12} fontFamily="var(--font-body)">
         {series.map((p, i) => (
           <text key={p.week} x={START_X + i * STEP + BAR_WIDTH / 2} y={242} textAnchor="middle" className="font-semibold">
             {p.week}

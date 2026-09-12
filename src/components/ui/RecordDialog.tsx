@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "./Button";
 import { CloseIcon } from "@/components/icons";
 
@@ -39,13 +39,23 @@ export function RecordDialog({
 }: RecordDialogProps) {
   const [mode, setMode] = useState<"view" | "edit" | "confirm">("view");
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center p-[var(--space-4)] bg-[color-mix(in_srgb,var(--color-neutral-900)_50%,transparent)]"
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 grid place-items-center p-[var(--space-4)] bg-black/40 dark:bg-black/60 backdrop-blur-xs animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[560px] max-h-[85vh] overflow-auto flex flex-col gap-4 p-[var(--space-4)] rounded-[var(--radius-lg)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)]"
+        className="w-full max-w-[560px] max-h-[85vh] overflow-auto flex flex-col gap-4 p-5 rounded-[var(--radius-lg)] bg-[var(--color-surface)] border border-[var(--color-divider)] shadow-[var(--shadow-lg)] [box-shadow:var(--shadow-lg),var(--card-inset-highlight)] animate-modal-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-start gap-3">
